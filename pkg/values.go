@@ -1,8 +1,8 @@
 package neo4j
 
 /*
-#cgo CFLAGS: -ID:/Projects.GitHub/seabolt/seabolt/include
-#cgo LDFLAGS: -LD:/Projects.GitHub/seabolt/build/lib -lseabolt
+#cgo CFLAGS: -ID:/Projects.GitHub/seabolt/seabolt/include -I/home/ali/Projects/neo4j/seabolt/seabolt/include
+#cgo LDFLAGS: -LD:/Projects.GitHub/seabolt/build/lib -L/home/ali/Projects/neo4j/seabolt/build/lib -lseabolt
 
 #include <memory.h>
 #include <stdlib.h>
@@ -62,14 +62,14 @@ func valueAsFloat(value *C.struct_BoltValue) float64 {
 
 func valueAsString(value *C.struct_BoltValue) string {
 	val := C.BoltString_get(value)
-	return C.GoStringN(val, value.size)
+	return C.GoStringN(val, C.int(value.size))
 }
 
 func valueAsDictionary(value *C.struct_BoltValue) map[string]interface{} {
 	size := int(value.size)
 	dict := make(map[string]interface{}, size)
 	for i := 0; i < size; i++ {
-		index := C.int(i)
+		index := C.int32_t(i)
 		key := valueAsString(C.BoltDictionary_key(value, index))
 		value, err := valueAsGo(C.BoltDictionary_value(value, index))
 		if err != nil {
@@ -85,7 +85,7 @@ func valueAsList(value *C.struct_BoltValue) []interface{} {
 	size := int(value.size)
 	list := make([]interface{}, size)
 	for i := 0; i < size; i++ {
-		index := C.int(i)
+		index := C.int32_t(i)
 		value, err := valueAsGo(C.BoltList_value(value, index))
 		if err != nil {
 			panic(err)
@@ -98,7 +98,7 @@ func valueAsList(value *C.struct_BoltValue) []interface{} {
 
 func valueAsBytes(value *C.struct_BoltValue) []byte {
 	val := C.BoltBytes_get_all(value)
-	return C.GoBytes(unsafe.Pointer(val), value.size)
+	return C.GoBytes(unsafe.Pointer(val), C.int(value.size))
 }
 
 func valueToConnector(value interface{}) *C.struct_BoltValue {
@@ -180,7 +180,7 @@ func boolAsValue(target *C.struct_BoltValue, value bool) {
 }
 
 func intAsValue(target *C.struct_BoltValue, value int64) {
-	C.BoltValue_format_as_Integer(target, C.longlong(value))
+	C.BoltValue_format_as_Integer(target, C.int64_t(value))
 }
 
 func floatAsValue(target *C.struct_BoltValue, value float64) {
@@ -189,7 +189,7 @@ func floatAsValue(target *C.struct_BoltValue, value float64) {
 
 func stringAsValue(target *C.struct_BoltValue, value string) {
 	str := C.CString(value)
-	C.BoltValue_format_as_String(target, str, C.int(len(value)))
+	C.BoltValue_format_as_String(target, str, C.int32_t(len(value)))
 	C.free(unsafe.Pointer(str))
 }
 
@@ -199,9 +199,9 @@ func listAsValue(target *C.struct_BoltValue, value interface{}) {
 		panic("listAsValue invoked with a non-slice type")
 	}
 
-	C.BoltValue_format_as_List(target, C.int(slice.Len()))
+	C.BoltValue_format_as_List(target, C.int32_t(slice.Len()))
 	for i := 0; i < slice.Len(); i++ {
-		elTarget := C.BoltList_value(target, C.int(i))
+		elTarget := C.BoltList_value(target, C.int32_t(i))
 		valueAsConnector(elTarget, slice.Index(i).Interface())
 	}
 }
@@ -212,9 +212,9 @@ func mapAsValue(target *C.struct_BoltValue, value interface{}) {
 		panic("mapAsValue invoked with a non-map type")
 	}
 
-	C.BoltValue_format_as_Dictionary(target, C.int(dict.Len()))
+	C.BoltValue_format_as_Dictionary(target, C.int32_t(dict.Len()))
 
-	index := C.int(0)
+	index := C.int32_t(0)
 	for _, key := range dict.MapKeys() {
 		keyTarget := C.BoltDictionary_key(target, index)
 		elTarget := C.BoltDictionary_value(target, index)

@@ -1,8 +1,8 @@
 package neo4j
 
 /*
-#cgo CFLAGS: -ID:/Projects.GitHub/seabolt/seabolt/include
-#cgo LDFLAGS: -LD:/Projects.GitHub/seabolt/build/lib -lseabolt
+#cgo CFLAGS: -ID:/Projects.GitHub/seabolt/seabolt/include -I/home/ali/Projects/neo4j/seabolt/seabolt/include
+#cgo LDFLAGS: -LD:/Projects.GitHub/seabolt/build/lib -L/home/ali/Projects/neo4j/seabolt/build/lib -lseabolt
 
 #include <memory.h>
 #include <stdlib.h>
@@ -150,17 +150,17 @@ func (connection *internalConnection) Run(cypher string, params map[string]inter
 	stmt := C.CString(cypher)
 	defer C.free(unsafe.Pointer(stmt))
 
-	res := C.BoltConnection_cypher(connection.connectionInstance, stmt, C.ulonglong(len(cypher)), C.int(len(params)))
+	res := C.BoltConnection_cypher(connection.connectionInstance, stmt, C.size_t(len(cypher)), C.int32_t(len(params)))
 	if res < 0 {
 		return -1, errors.New("unable to set cypher statement")
 	}
 
 	i := 0
 	for k, v := range params {
-		index := C.int(i)
+		index := C.int32_t(i)
 		key := C.CString(k)
 
-		boltValue := C.BoltConnection_cypher_parameter(connection.connectionInstance, index, key, C.ulonglong(len(k)))
+		boltValue := C.BoltConnection_cypher_parameter(connection.connectionInstance, index, key, C.size_t(len(k)))
 		if boltValue == nil {
 			return -1, errors.New("unable to get cypher statement parameter value to set")
 		}
@@ -203,7 +203,7 @@ func (connection *internalConnection) Flush() error  {
 }
 
 func (connection *internalConnection) Fetch(request RequestHandle) (FetchType, error)  {
-	res := C.BoltConnection_fetch(connection.connectionInstance, C.ulonglong(request))
+	res := C.BoltConnection_fetch(connection.connectionInstance, C.bolt_request_t(request))
 	if res < 0 {
 		return -1, errors.New("unable to fetch from connection")
 	}
@@ -212,7 +212,7 @@ func (connection *internalConnection) Fetch(request RequestHandle) (FetchType, e
 }
 
 func (connection *internalConnection) FetchSummary(request RequestHandle) (int, error)  {
-	res := C.BoltConnection_fetch_summary(connection.connectionInstance, C.ulonglong(request))
+	res := C.BoltConnection_fetch_summary(connection.connectionInstance, C.bolt_request_t(request))
 	if res < 0 {
 		return -1, errors.New("unable to fetch summary from connection")
 	}
@@ -226,7 +226,7 @@ func (connection *internalConnection) Summary() (int16, []interface{}, error)  {
 	fieldsCount := int(C.BoltConnection_summary_n_fields(connection.connectionInstance))
 	fields := make([]interface{}, fieldsCount)
 	for i := 0; i < fieldsCount; i++ {
-		field, err := valueAsGo(C.BoltConnection_summary_field(connection.connectionInstance, C.int(i)))
+		field, err := valueAsGo(C.BoltConnection_summary_field(connection.connectionInstance, C.int32_t(i)))
 		if err != nil {
 			return -1, nil, err
 		}
