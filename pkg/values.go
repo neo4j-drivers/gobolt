@@ -7,13 +7,7 @@ package neo4j
 #include <memory.h>
 #include <stdlib.h>
 
-#include "bolt/addressing.h"
-#include "bolt/buffering.h"
-#include "bolt/connections.h"
-#include "bolt/lifecycle.h"
-#include "bolt/mem.h"
-#include "bolt/logging.h"
-#include "bolt/pooling.h"
+#include "bolt/values.h"
 */
 import "C"
 import (

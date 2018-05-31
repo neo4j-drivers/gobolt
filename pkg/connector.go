@@ -8,12 +8,10 @@ package neo4j
 #include <stdlib.h>
 
 #include "bolt/addressing.h"
-#include "bolt/buffering.h"
 #include "bolt/connections.h"
 #include "bolt/lifecycle.h"
-#include "bolt/mem.h"
-#include "bolt/logging.h"
 #include "bolt/pooling.h"
+#include "bolt/mem.h"
 
 FILE *get_stdout() {
 	return stdout;
