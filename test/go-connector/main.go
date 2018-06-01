@@ -100,12 +100,12 @@ func executeQuery()  {
 	}
 
 	start = time.Now()
-	code, metadata, err := conn.Summary()
-	if code != 0x70 {
-		panic(errors.New("unexpected summary type code = " + string(code)))
+	metadata, err := conn.Summary()
+	if err != nil {
+		panic(err)
 	}
 
-	fields := metadata[0].(map[string]interface{})["fields"].([]interface{})
+	fields := metadata["fields"].([]interface{})
 	for i := 0; i < len(fields); i++ {
 		if i > 0 {
 			fmt.Print("\t")

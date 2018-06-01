@@ -43,7 +43,7 @@ type Connection interface {
 	Flush() error
 	Fetch(request RequestHandle) (FetchType, error) // return type ?
 	FetchSummary(request RequestHandle) (int, error) // return type ?
-	Summary() (int16, []interface{}, error)
+	Summary() (map[string]interface{}, error)
 	Data() (interface{}, error)
 
 	Reset() error
@@ -218,35 +218,45 @@ func (connection *internalConnection) FetchSummary(request RequestHandle) (int, 
 	return int(res), nil
 }
 
-func (connection *internalConnection) Summary() (int16, []interface{}, error)  {
-	code := int16(C.BoltConnection_summary_code(connection.connectionInstance))
+func (connection *internalConnection) Summary() (map[string]interface{}, error)  {
+	metadata := make(map[string]interface{}, 1)
 
-	fieldsCount := int(C.BoltConnection_summary_n_fields(connection.connectionInstance))
+	fieldsCount := int(C.BoltConnection_result_n_fields(connection.connectionInstance))
+	if fieldsCount < 0 {
+		return nil, errors.New("unable to get number of fields")
+	}
 	fields := make([]interface{}, fieldsCount)
 	for i := 0; i < fieldsCount; i++ {
-		field, err := valueAsGo(C.BoltConnection_summary_field(connection.connectionInstance, C.int32_t(i)))
-		if err != nil {
-			return -1, nil, err
+		fieldNameLength := C.BoltConnection_result_field_name_size(connection.connectionInstance, C.int32_t(i))
+		if fieldNameLength < 0 {
+			return nil, errors.New("unable to field name length at index " + string(i))
+		}
+		fieldNameC := C.BoltConnection_result_field_name(connection.connectionInstance, C.int32_t(i))
+		if fieldNameC == nil {
+			return nil, errors.New("unable to field name at index " + string(i))
 		}
 
-		fields[i] = field
+		fields[i] = C.GoStringN(fieldNameC, fieldNameLength)
 	}
 
-	return code, fields, nil
+	metadata["fields"] = fields
+
+	return metadata, nil
 }
 
 func (connection *internalConnection) Data() (interface{}, error)  {
-	data := C.BoltConnection_data(connection.connectionInstance)
-	if data == nil {
-		return nil, errors.New("unable to get reference to the data value")
-	}
+	size := int(C.BoltConnection_record_size(connection.connectionInstance))
+	data := make([]interface{}, size)
+	for i := 0; i < size; i++ {
+		field := C.BoltConnection_record_field(connection.connectionInstance, C.int32_t(i))
+		fieldAsGo, err := valueAsGo(field)
+		if err != nil {
+			return nil, err
+		}
 
-	value, err := valueAsGo(data)
-	if err != nil {
-		return nil, err
+		data[i] = fieldAsGo
 	}
-
-	return value, nil
+	return data, nil
 }
 
 func (connection *internalConnection) Reset() error {

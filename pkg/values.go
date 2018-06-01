@@ -2,7 +2,7 @@ package neo4j
 
 /*
 #cgo CFLAGS: -ID:/Projects.GitHub/seabolt/seabolt/include -I/home/ali/Projects/neo4j/seabolt/seabolt/include
-#cgo LDFLAGS: -LD:/Projects.GitHub/seabolt/build/lib -L/home/ali/Projects/neo4j/seabolt/build/lib -lseabolt
+#cgo LDFLAGS: -LD:/Projects.GitHub/seabolt/build/lib/debug -L/home/ali/Projects/neo4j/seabolt/build/lib -lseabolt
 
 #include <memory.h>
 #include <stdlib.h>
