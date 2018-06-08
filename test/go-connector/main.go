@@ -67,7 +67,6 @@ func executeQuery()  {
 		log.Printf("Run took %s", elapsed)
 	}
 
-
 	start = time.Now()
 	pullAllMsg, err := conn.PullAll()
 	if err != nil {
@@ -100,7 +99,7 @@ func executeQuery()  {
 	}
 
 	start = time.Now()
-	metadata, err := conn.Summary()
+	metadata, err := conn.Metadata()
 	if err != nil {
 		panic(err)
 	}
