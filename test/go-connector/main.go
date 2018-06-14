@@ -25,7 +25,7 @@ func executeQuery()  {
 	connector, err := neo4j.NewConnector(uri, map[string]interface{}{
 		"principal": username,
 		"credentials": password,
-	}, neo4j.Config{Encryption: secure, Debug: debug })
+	}, &neo4j.Config{Encryption: secure, Debug: debug })
 	if err != nil {
 		panic(err)
 	}
@@ -58,7 +58,7 @@ func executeQuery()  {
 	}
 
 	start = time.Now()
-	runMsg, err := conn.Run( query, map[string]interface{}{})
+	runMsg, err := conn.Run( query, &map[string]interface{}{})
 	if err != nil {
 		panic(err)
 	}
@@ -133,7 +133,7 @@ func executeQuery()  {
 			panic(err)
 		}
 
-		fields = data.([]interface{})
+		fields = data
 		for i := 0; i < len(fields); i++ {
 			if i > 0 {
 				fmt.Print("\t")

@@ -15,14 +15,14 @@ import (
 )
 
 type Connection interface {
-	Run(cypher string, args map[string]interface{})  (RequestHandle, error)
+	Run(cypher string, args *map[string]interface{}) (RequestHandle, error)
 	PullAll() (RequestHandle, error)
 	DiscardAll() (RequestHandle, error)
 	Flush() error
-	Fetch(request RequestHandle) (FetchType, error) // return type ?
+	Fetch(request RequestHandle) (FetchType, error)  // return type ?
 	FetchSummary(request RequestHandle) (int, error) // return type ?
 	Metadata() (map[string]interface{}, error)
-	Data() (interface{}, error)
+	Data() ([]interface{}, error)
 
 	Reset() error
 	Close() error
@@ -33,17 +33,24 @@ type neo4jConnection struct {
 	cInstance *C.struct_BoltConnection
 }
 
-func (connection *neo4jConnection) Run(cypher string, params map[string]interface{}) (RequestHandle, error) {
+func (connection *neo4jConnection) Run(cypher string, params *map[string]interface{}) (RequestHandle, error) {
 	stmt := C.CString(cypher)
 	defer C.free(unsafe.Pointer(stmt))
 
-	res := C.BoltConnection_cypher(connection.cInstance, stmt, C.size_t(len(cypher)), C.int32_t(len(params)))
+	var actualParams map[string]interface{}
+	if params == nil {
+		actualParams = map[string]interface{}(nil)
+	} else {
+		actualParams = *params
+	}
+
+	res := C.BoltConnection_cypher(connection.cInstance, stmt, C.size_t(len(cypher)), C.int32_t(len(actualParams)))
 	if res < 0 {
 		return -1, errors.New("unable to set cypher statement")
 	}
 
 	i := 0
-	for k, v := range params {
+	for k, v := range actualParams {
 		index := C.int32_t(i)
 		key := C.CString(k)
 
@@ -65,7 +72,7 @@ func (connection *neo4jConnection) Run(cypher string, params map[string]interfac
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
 }
 
-func (connection *neo4jConnection) PullAll() (RequestHandle, error)  {
+func (connection *neo4jConnection) PullAll() (RequestHandle, error) {
 	res := C.BoltConnection_load_pull_request(connection.cInstance, -1)
 	if res < 0 {
 		return -1, errors.New("unable to generate PULLALL message")
@@ -73,7 +80,7 @@ func (connection *neo4jConnection) PullAll() (RequestHandle, error)  {
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
 }
 
-func (connection *neo4jConnection) DiscardAll() (RequestHandle, error)  {
+func (connection *neo4jConnection) DiscardAll() (RequestHandle, error) {
 	res := C.BoltConnection_load_discard_request(connection.cInstance, -1)
 	if res < 0 {
 		return -1, errors.New("unable to generate DISCARDALL message")
@@ -81,7 +88,7 @@ func (connection *neo4jConnection) DiscardAll() (RequestHandle, error)  {
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
 }
 
-func (connection *neo4jConnection) assertReadyState() error  {
+func (connection *neo4jConnection) assertReadyState() error {
 	if connection.cInstance.status != C.BOLT_READY {
 		return errors.New("expected connection to be in READY state, where it is " + string(connection.cInstance.status))
 	}
@@ -89,7 +96,7 @@ func (connection *neo4jConnection) assertReadyState() error  {
 	return nil
 }
 
-func (connection *neo4jConnection) Flush() error  {
+func (connection *neo4jConnection) Flush() error {
 	res := C.BoltConnection_send(connection.cInstance)
 	if res < 0 {
 		return errors.New("unable to send pending messages")
@@ -98,7 +105,7 @@ func (connection *neo4jConnection) Flush() error  {
 	return connection.assertReadyState()
 }
 
-func (connection *neo4jConnection) Fetch(request RequestHandle) (FetchType, error)  {
+func (connection *neo4jConnection) Fetch(request RequestHandle) (FetchType, error) {
 	res := C.BoltConnection_fetch(connection.cInstance, C.bolt_request_t(request))
 	if res < 0 {
 		return -1, errors.New("unable to fetch from connection")
@@ -112,7 +119,7 @@ func (connection *neo4jConnection) Fetch(request RequestHandle) (FetchType, erro
 	return FetchType(res), nil
 }
 
-func (connection *neo4jConnection) FetchSummary(request RequestHandle) (int, error)  {
+func (connection *neo4jConnection) FetchSummary(request RequestHandle) (int, error) {
 	res := C.BoltConnection_fetch_summary(connection.cInstance, C.bolt_request_t(request))
 	if res < 0 {
 		return -1, errors.New("unable to fetch summary from connection")
@@ -126,7 +133,7 @@ func (connection *neo4jConnection) FetchSummary(request RequestHandle) (int, err
 	return int(res), nil
 }
 
-func (connection *neo4jConnection) Metadata() (map[string]interface{}, error)  {
+func (connection *neo4jConnection) Metadata() (map[string]interface{}, error) {
 	metadata := make(map[string]interface{}, 1)
 
 	fields, err := valueAsGo(C.BoltConnection_metadata_fields(connection.cInstance))
@@ -134,18 +141,25 @@ func (connection *neo4jConnection) Metadata() (map[string]interface{}, error)  {
 		return nil, err
 	}
 
-	metadata["fields"] = fields
+	if fields != nil {
+		fieldsAsList := fields.([]interface{})
+		fieldsAsStr := make([]string, len(fieldsAsList))
+		for i := range fieldsAsList {
+			fieldsAsStr[i] = fieldsAsList[i].(string)
+		}
+		metadata["fields"] = fieldsAsStr
+	}
 
 	return metadata, nil
 }
 
-func (connection *neo4jConnection) Data() (interface{}, error)  {
+func (connection *neo4jConnection) Data() ([]interface{}, error) {
 	fields, err := valueAsGo(C.BoltConnection_record_fields(connection.cInstance))
 	if err != nil {
 		return nil, err
 	}
 
-	return fields, nil
+	return fields.([]interface{}), nil
 }
 
 func (connection *neo4jConnection) Reset() error {

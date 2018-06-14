@@ -87,7 +87,7 @@ func GetAllocationStats() (int64, int64, int64) {
 	return int64(current), int64(peak), int64(events)
 }
 
-func NewConnector(uri string, authToken map[string]interface{}, config Config) (connector Connector, err error) {
+func NewConnector(uri string, authToken map[string]interface{}, config *Config) (connector Connector, err error) {
 	parsedUrl, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
@@ -98,8 +98,15 @@ func NewConnector(uri string, authToken map[string]interface{}, config Config) (
 	defer C.free(unsafe.Pointer(port))
 	address := C.BoltAddress_create(hostname, port)
 
+	if config == nil {
+		config = &Config{
+			Debug: true,
+			Encryption: true,
+		}
+	}
+
 	startupLibrary(config.Debug)
-	conn := &neo4jConnector{uri: parsedUrl, authToken: authToken, config: config, address: address}
+	conn := &neo4jConnector{uri: parsedUrl, authToken: authToken, config: *config, address: address}
 	return conn, nil
 }
 
