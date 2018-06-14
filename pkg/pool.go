@@ -38,4 +38,3 @@ func (pool *neo4jPool) release(connection *neo4jConnection) error {
 	}
 	return nil
 }
-

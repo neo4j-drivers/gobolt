@@ -25,17 +25,18 @@ type Connector interface {
 type RequestHandle int64
 
 type FetchType int
+
 const (
-	RECORD FetchType = 1
-	METADATA = 0
-	ERROR = -1
+	RECORD   FetchType = 1
+	METADATA           = 0
+	ERROR              = -1
 )
 
 var initCounter int32 = 0
 
-type Config struct{
+type Config struct {
 	Encryption bool
-	Debug bool
+	Debug      bool
 }
 
 type neo4jConnector struct {
@@ -64,7 +65,7 @@ func (conn *neo4jConnector) GetPool() (Pool, error) {
 			auth_scheme: C.BOLT_AUTH_BASIC,
 			user:        user,
 			password:    password,
-			user_agent:   userAgent,
+			user_agent:  userAgent,
 		}
 
 		socketType := C.BOLT_SOCKET
@@ -100,7 +101,7 @@ func NewConnector(uri string, authToken map[string]interface{}, config *Config) 
 
 	if config == nil {
 		config = &Config{
-			Debug: true,
+			Debug:      true,
 			Encryption: true,
 		}
 	}
