@@ -104,7 +104,7 @@ func executeQuery()  {
 		panic(err)
 	}
 
-	fields := metadata["fields"].([]interface{})
+	fields := metadata["fields"].([]string)
 	for i := 0; i < len(fields); i++ {
 		if i > 0 {
 			fmt.Print("\t")
@@ -133,13 +133,12 @@ func executeQuery()  {
 			panic(err)
 		}
 
-		fields = data
-		for i := 0; i < len(fields); i++ {
+		for i := 0; i < len(data); i++ {
 			if i > 0 {
 				fmt.Print("\t")
 			}
 
-			fmt.Print(fields[i])
+			fmt.Print(data[i])
 		}
 
 		fmt.Println()
