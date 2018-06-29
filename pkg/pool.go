@@ -27,7 +27,11 @@ func (pool *neo4jPool) Acquire() (Connection, error) {
 }
 
 func (pool *neo4jPool) Close() error {
-	C.BoltConnectionPool_destroy(pool.cInstance)
+    if pool.cInstance != nil {
+        C.BoltConnectionPool_destroy(pool.cInstance)
+        pool.cInstance = nil
+    }
+
 	return nil
 }
 

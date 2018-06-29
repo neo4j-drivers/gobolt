@@ -23,6 +23,7 @@ var (
 func executeQuery()  {
 	start := time.Now()
 	connector, err := neo4j.NewConnector(uri, map[string]interface{}{
+	    "scheme": "basic",
 		"principal": username,
 		"credentials": password,
 	}, &neo4j.Config{Encryption: secure, Debug: debug })
