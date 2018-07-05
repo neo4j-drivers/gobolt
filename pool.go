@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package neo4j_go_connector
+package seabolt
 
 /*
 #cgo pkg-config: seabolt
@@ -45,10 +45,10 @@ func (pool *neo4jPool) Acquire() (Connection, error) {
 }
 
 func (pool *neo4jPool) Close() error {
-    if pool.cInstance != nil {
-        C.BoltConnectionPool_destroy(pool.cInstance)
-        pool.cInstance = nil
-    }
+	if pool.cInstance != nil {
+		C.BoltConnectionPool_destroy(pool.cInstance)
+		pool.cInstance = nil
+	}
 
 	return nil
 }

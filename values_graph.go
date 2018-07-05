@@ -17,70 +17,70 @@
  * limitations under the License.
  */
 
-package neo4j_go_connector
+package seabolt
 
 type NodeValue struct {
-    id     int64
-    labels []string
-    props  map[string]interface{}
+	id     int64
+	labels []string
+	props  map[string]interface{}
 }
 
 type RelationshipValue struct {
-    id      int64
-    startId int64
-    endId   int64
-    relType string
-    props   map[string]interface{}
+	id      int64
+	startId int64
+	endId   int64
+	relType string
+	props   map[string]interface{}
 }
 
 type SegmentValue struct {
-    start NodeValue
-    relationship RelationshipValue
-    end NodeValue
+	start        NodeValue
+	relationship RelationshipValue
+	end          NodeValue
 }
 
 type PathValue struct {
-    segments []SegmentValue
-    nodes         []NodeValue
-    relationships []RelationshipValue
+	segments      []SegmentValue
+	nodes         []NodeValue
+	relationships []RelationshipValue
 }
 
 func (node *NodeValue) Id() int64 {
-    return node.id
+	return node.id
 }
 
 func (node *NodeValue) Labels() []string {
-    return node.labels
+	return node.labels
 }
 
 func (node *NodeValue) Props() map[string]interface{} {
-    return node.props
+	return node.props
 }
 
 func (rel *RelationshipValue) Id() int64 {
-    return rel.id
+	return rel.id
 }
 
 func (rel *RelationshipValue) StartId() int64 {
-    return rel.startId
+	return rel.startId
 }
 
 func (rel *RelationshipValue) EndId() int64 {
-    return rel.endId
+	return rel.endId
 }
 
 func (rel *RelationshipValue) Type() string {
-    return rel.relType
+	return rel.relType
 }
 
 func (rel *RelationshipValue) Props() map[string]interface{} {
-    return rel.props
+	return rel.props
 }
 
 func (path *PathValue) Nodes() []NodeValue {
-    return path.nodes
+	return path.nodes
 }
 
 func (path *PathValue) Relationships() []RelationshipValue {
-    return path.relationships
+	return path.relationships
 }
