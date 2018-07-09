@@ -30,38 +30,36 @@ import (
 	"strings"
 )
 
+// DatabaseError represents errors returned from the server a FAILURE messages
 type DatabaseError struct {
 	classification string
 	code           string
 	message        string
 }
 
+// ConnectorError represents errors that occur on the connector/client side, like network errors, etc.
 type ConnectorError struct {
 	state int
 	error int
 }
 
-type SessionExpiredError struct {
-	message string
-}
-
+// Code returns code of the error returned from the database
 func (failure *DatabaseError) Code() string {
 	return failure.code
 }
 
+// Message returns message of the error returned from the database
 func (failure *DatabaseError) Message() string {
 	return failure.message
 }
 
+// Error returns textual representation of the error returned from the database
 func (failure *DatabaseError) Error() string {
 	return fmt.Sprintf("database returned error [%s]: %s", failure.code, failure.message)
 }
 
-func (failure *SessionExpiredError) Error() string {
-	return fmt.Sprintf("session expired: %s", failure.message)
-}
-
 // TODO: add some text description to the error message based on the state and error codes possibly from connector side
+// Error returns textual representation of the connector level error
 func (failure *ConnectorError) Error() string {
 	return fmt.Sprintf("expected connection to be in READY state, where it is %d [error is %d]", failure.state, failure.error)
 }
@@ -71,11 +69,11 @@ func newDatabaseError(details map[string]interface{}) error {
 	var codeInt, messageInt interface{}
 
 	if codeInt, ok = details["code"]; !ok {
-		return fmt.Errorf("expected 'code' key to be present in map '%g'", details)
+		return fmt.Errorf("expected 'code' key to be present in map '%v'", details)
 	}
 
 	if messageInt, ok = details["message"]; !ok {
-		return fmt.Errorf("expected 'message' key to be present in map '%g'", details)
+		return fmt.Errorf("expected 'message' key to be present in map '%v'", details)
 	}
 
 	code := codeInt.(string)
@@ -100,25 +98,19 @@ func newConnectionErrorWithCode(state int, error int) error {
 	return &ConnectorError{state: state, error: error}
 }
 
-func newSessionExpiredException(message string) error {
-	return &SessionExpiredError{message: message}
-}
-
+// IsDatabaseError checkes whether given err is a DatabaseError
 func IsDatabaseError(err error) bool {
 	_, ok := err.(*DatabaseError)
 	return ok
 }
 
+// IsConnectorError checkes whether given err is a ConnectorError
 func IsConnectorError(err error) bool {
 	_, ok := err.(*ConnectorError)
 	return ok
 }
 
-func IsSessionExpired(err error) bool {
-	_, ok := err.(*SessionExpiredError)
-	return ok
-}
-
+// IsTransientError checkes whether given err is a transient error
 func IsTransientError(err error) bool {
 	if dbErr, ok := err.(*DatabaseError); ok {
 		if dbErr.classification == "TransientError" {
@@ -136,6 +128,7 @@ func IsTransientError(err error) bool {
 	return false
 }
 
+// IsServiceUnavailable checkes whether given err represents a service unavailable status
 func IsServiceUnavailable(err error) bool {
 	if IsDatabaseError(err) {
 		// TODO: Add specific failure codes while adding routing driver support

@@ -147,15 +147,15 @@ func valueAsNode(value *C.struct_BoltValue) NodeValue {
 
 func valueAsRelationship(value *C.struct_BoltValue) RelationshipValue {
 	idValue := C.BoltStructure_value(value, 0)
-	startIdValue := C.BoltStructure_value(value, 1)
-	endIdValue := C.BoltStructure_value(value, 2)
+	startIDValue := C.BoltStructure_value(value, 1)
+	endIDValue := C.BoltStructure_value(value, 2)
 	relTypeValue := C.BoltStructure_value(value, 3)
 	propsValue := C.BoltStructure_value(value, 4)
 
 	return RelationshipValue{
 		id:      valueAsInt(idValue),
-		startId: valueAsInt(startIdValue),
-		endId:   valueAsInt(endIdValue),
+		startID: valueAsInt(startIDValue),
+		endID:   valueAsInt(endIDValue),
 		relType: valueAsString(relTypeValue),
 		props:   valueAsDictionary(propsValue),
 	}
@@ -168,8 +168,8 @@ func valueAsUnboundRelationship(value *C.struct_BoltValue) RelationshipValue {
 
 	return RelationshipValue{
 		id:      valueAsInt(idValue),
-		startId: -1,
-		endId:   -1,
+		startID: -1,
+		endID:   -1,
 		relType: valueAsString(relTypeValue),
 		props:   valueAsDictionary(propsValue),
 	}
@@ -200,19 +200,19 @@ func valueAsPath(value *C.struct_BoltValue) PathValue {
 	prevNode := uniqueNodes[0]
 	nodes[0] = prevNode
 	for i := 0; i < segmentsSize; i++ {
-		relId := valueAsInt(C.BoltList_value(segmentsValue, C.int32_t(2*i)))
+		relID := valueAsInt(C.BoltList_value(segmentsValue, C.int32_t(2*i)))
 		nextNodeIndex := valueAsInt(C.BoltList_value(segmentsValue, C.int32_t(2*i+1)))
 		nextNode := uniqueNodes[nextNodeIndex]
 
 		var rel RelationshipValue
-		if relId < 0 {
-			rel = uniqueRels[(-relId)-1]
-			rel.startId = prevNode.id
-			rel.endId = nextNode.id
+		if relID < 0 {
+			rel = uniqueRels[(-relID)-1]
+			rel.startID = prevNode.id
+			rel.endID = nextNode.id
 		} else {
-			rel = uniqueRels[relId-1]
-			rel.startId = prevNode.id
-			rel.endId = nextNode.id
+			rel = uniqueRels[relID-1]
+			rel.startID = prevNode.id
+			rel.endID = nextNode.id
 		}
 
 		nodes[i+1] = nextNode
@@ -345,6 +345,6 @@ func mapAsValue(target *C.struct_BoltValue, value interface{}) {
 		valueAsConnector(keyTarget, key.Interface())
 		valueAsConnector(elTarget, dict.MapIndex(key).Interface())
 
-		index += 1
+		index++
 	}
 }

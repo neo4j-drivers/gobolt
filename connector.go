@@ -35,23 +35,30 @@ import (
 	"unsafe"
 )
 
+// Connector represents an initialised seabolt connector
 type Connector interface {
 	GetPool() (Pool, error)
 	Close() error
 }
 
+// RequestHandle identifies an individual request sent to server
 type RequestHandle int64
 
+// FetchType identifies the type of the result fetched via Fetch() call
 type FetchType int
 
 const (
-	RECORD   FetchType = 1
-	METADATA           = 0
-	ERROR              = -1
+	// RECORD tells that fetched data is record
+	RECORD FetchType = 1
+	// METADATA tells that fetched data is metadata
+	METADATA = 0
+	// ERROR tells that fetch was not successful
+	ERROR = -1
 )
 
-var initCounter int32 = 0
+var initCounter int32
 
+// Config holds the available configurations options applicable to the connector
 type Config struct {
 	Encryption bool
 	Debug      bool
@@ -97,6 +104,7 @@ func (conn *neo4jConnector) GetPool() (Pool, error) {
 	return conn.pool, nil
 }
 
+// GetAllocationStats returns statistics about seabolt (C) allocations
 func GetAllocationStats() (int64, int64, int64) {
 	current := C.BoltMem_current_allocation()
 	peak := C.BoltMem_peak_allocation()
@@ -105,13 +113,14 @@ func GetAllocationStats() (int64, int64, int64) {
 	return int64(current), int64(peak), int64(events)
 }
 
+// NewConnector returns a new connector instance with given parameters
 func NewConnector(uri string, authToken map[string]interface{}, config *Config) (connector Connector, err error) {
-	parsedUrl, err := url.Parse(uri)
+	parsedURL, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
 	}
 
-	hostname, port := C.CString(parsedUrl.Hostname()), C.CString(parsedUrl.Port())
+	hostname, port := C.CString(parsedURL.Hostname()), C.CString(parsedURL.Port())
 	defer C.free(unsafe.Pointer(hostname))
 	defer C.free(unsafe.Pointer(port))
 	address := C.BoltAddress_create(hostname, port)
@@ -124,7 +133,7 @@ func NewConnector(uri string, authToken map[string]interface{}, config *Config) 
 	}
 
 	startupLibrary(config.Debug)
-	conn := &neo4jConnector{uri: parsedUrl, authToken: authToken, config: *config, address: address}
+	conn := &neo4jConnector{uri: parsedURL, authToken: authToken, config: *config, address: address}
 	return conn, nil
 }
 

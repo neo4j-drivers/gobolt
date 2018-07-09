@@ -20,32 +20,33 @@
 package main
 
 import (
-	"flag"
-	neo4j "neo4j-go-connector"
 	"errors"
+	"flag"
 	"fmt"
-	"time"
 	"log"
 	"os"
+	"time"
+
+	"github.com/neo4j-drivers/neo4j-go-connector"
 )
 
 var (
-	uri string
+	uri      string
 	username string
 	password string
-	secure bool
-	query string
-	debug bool
-	stats bool
+	secure   bool
+	query    string
+	debug    bool
+	stats    bool
 )
 
-func executeQuery()  {
+func executeQuery() {
 	start := time.Now()
-	connector, err := neo4j.NewConnector(uri, map[string]interface{}{
-	    "scheme": "basic",
-		"principal": username,
+	connector, err := seabolt.NewConnector(uri, map[string]interface{}{
+		"scheme":      "basic",
+		"principal":   username,
 		"credentials": password,
-	}, &neo4j.Config{Encryption: secure, Debug: debug })
+	}, &seabolt.Config{Encryption: secure, Debug: debug})
 	if err != nil {
 		panic(err)
 	}
@@ -78,7 +79,7 @@ func executeQuery()  {
 	}
 
 	start = time.Now()
-	runMsg, err := conn.Run( query, &map[string]interface{}{})
+	runMsg, err := conn.Run(query, &map[string]interface{}{})
 	if err != nil {
 		panic(err)
 	}
@@ -106,7 +107,6 @@ func executeQuery()  {
 	if stats {
 		log.Printf("Flush took %s", elapsed)
 	}
-
 
 	start = time.Now()
 	records, err := conn.FetchSummary(runMsg)
@@ -174,13 +174,13 @@ func main() {
 	executeQuery()
 
 	if stats {
-		current, peak, events := neo4j.GetAllocationStats()
+		current, peak, events := seabolt.GetAllocationStats()
 
-		fmt.Fprintf( os.Stderr, "=====================================\n")
-		fmt.Fprintf( os.Stderr, "current allocation	: %d bytes\n", current)
-		fmt.Fprintf( os.Stderr, "peak allocation		: %d bytes\n", peak)
-		fmt.Fprintf( os.Stderr, "allocation events	: %d\n", events)
-		fmt.Fprintf( os.Stderr, "=====================================\n")
+		fmt.Fprintf(os.Stderr, "=====================================\n")
+		fmt.Fprintf(os.Stderr, "current allocation	: %d bytes\n", current)
+		fmt.Fprintf(os.Stderr, "peak allocation		: %d bytes\n", peak)
+		fmt.Fprintf(os.Stderr, "allocation events	: %d\n", events)
+		fmt.Fprintf(os.Stderr, "=====================================\n")
 	}
 }
 

@@ -19,68 +19,82 @@
 
 package seabolt
 
+// NodeValue represents a node in the neo4j graph database
 type NodeValue struct {
 	id     int64
 	labels []string
 	props  map[string]interface{}
 }
 
+// RelationshipValue represents a relationship in the neo4j graph database
 type RelationshipValue struct {
 	id      int64
-	startId int64
-	endId   int64
+	startID int64
+	endID   int64
 	relType string
 	props   map[string]interface{}
 }
 
+// SegmentValue represents a relationship with start and end nodes in the neo4j graph database
 type SegmentValue struct {
 	start        NodeValue
 	relationship RelationshipValue
 	end          NodeValue
 }
 
+// PathValue represents a path of nodes connected with relationships in the neo4j graph database
 type PathValue struct {
 	segments      []SegmentValue
 	nodes         []NodeValue
 	relationships []RelationshipValue
 }
 
-func (node *NodeValue) Id() int64 {
+// ID returns id of the node
+func (node *NodeValue) ID() int64 {
 	return node.id
 }
 
+// Labels returns labels of the node
 func (node *NodeValue) Labels() []string {
 	return node.labels
 }
 
+// Props returns properties of the node
 func (node *NodeValue) Props() map[string]interface{} {
 	return node.props
 }
 
-func (rel *RelationshipValue) Id() int64 {
+// ID returns id of the relationship
+func (rel *RelationshipValue) ID() int64 {
 	return rel.id
 }
 
-func (rel *RelationshipValue) StartId() int64 {
-	return rel.startId
+// StartID returns the id of the start node
+func (rel *RelationshipValue) StartID() int64 {
+	return rel.startID
 }
 
-func (rel *RelationshipValue) EndId() int64 {
-	return rel.endId
+// EndID returns the id of the end node
+func (rel *RelationshipValue) EndID() int64 {
+	return rel.endID
 }
 
+// Type returns the relationship tyoe
 func (rel *RelationshipValue) Type() string {
 	return rel.relType
 }
 
+// Props returns properties of the relationship
 func (rel *RelationshipValue) Props() map[string]interface{} {
 	return rel.props
 }
 
+// Nodes returns the ordered list of nodes available on the path
 func (path *PathValue) Nodes() []NodeValue {
 	return path.nodes
 }
 
+// Relationships returns the ordered list of relationships on the path
 func (path *PathValue) Relationships() []RelationshipValue {
 	return path.relationships
 }

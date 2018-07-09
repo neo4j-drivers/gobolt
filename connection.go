@@ -32,6 +32,7 @@ import (
 	"unsafe"
 )
 
+// Connection represents an active seabolt connection
 type Connection interface {
 	Begin(bookmarks []string) (RequestHandle, error)
 	Commit() (RequestHandle, error)
@@ -120,7 +121,7 @@ func (connection *neo4jConnection) Run(cypher string, params *map[string]interfa
 
 		valueAsConnector(boltValue, v)
 
-		i += 1
+		i++
 	}
 
 	res = C.BoltConnection_load_run_request(connection.cInstance)

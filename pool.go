@@ -27,6 +27,7 @@ package seabolt
 import "C"
 import "errors"
 
+// Pool represents an instance of a pool of connections
 type Pool interface {
 	Acquire() (Connection, error)
 	Close() error
