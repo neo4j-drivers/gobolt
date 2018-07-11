@@ -29,11 +29,15 @@ package seabolt
 import "C"
 import (
 	"errors"
+	"fmt"
 	"unsafe"
 )
 
 // Connection represents an active seabolt connection
 type Connection interface {
+	RemoteAddress() string
+	Server() string
+
 	Begin(bookmarks []string) (RequestHandle, error)
 	Commit() (RequestHandle, error)
 	Rollback() (RequestHandle, error)
@@ -45,6 +49,7 @@ type Connection interface {
 	FetchSummary(request RequestHandle) (int, error) // return type ?
 
 	LastBookmark() string
+	Fields() ([]string, error)
 	Metadata() (map[string]interface{}, error)
 	Data() ([]interface{}, error)
 
@@ -55,6 +60,24 @@ type Connection interface {
 type neo4jConnection struct {
 	pool      *neo4jPool
 	cInstance *C.struct_BoltConnection
+}
+
+func (connection *neo4jConnection) RemoteAddress() string {
+	connectedHost := connection.cInstance.resolvedHost
+	if connectedHost == nil {
+		return "UNKNOWN"
+	}
+
+	return fmt.Sprintf("%s:%d", C.GoString(connectedHost), int(connection.cInstance.resolvedPort))
+}
+
+func (connection *neo4jConnection) Server() string {
+    server := C.BoltConnection_server(connection.cInstance)
+    if server == nil {
+        return "UNKNOWN"
+    }
+
+    return C.GoString(server)
 }
 
 func (connection *neo4jConnection) Begin(bookmarks []string) (RequestHandle, error) {
@@ -203,10 +226,8 @@ func (connection *neo4jConnection) LastBookmark() string {
 	return ""
 }
 
-func (connection *neo4jConnection) Metadata() (map[string]interface{}, error) {
-	metadata := make(map[string]interface{}, 1)
-
-	fields, err := valueAsGo(C.BoltConnection_metadata_fields(connection.cInstance))
+func (connection *neo4jConnection) Fields() ([]string, error) {
+	fields, err := valueAsGo(C.BoltConnection_fields(connection.cInstance))
 	if err != nil {
 		return nil, err
 	}
@@ -217,10 +238,23 @@ func (connection *neo4jConnection) Metadata() (map[string]interface{}, error) {
 		for i := range fieldsAsList {
 			fieldsAsStr[i] = fieldsAsList[i].(string)
 		}
-		metadata["fields"] = fieldsAsStr
+		return fieldsAsStr, nil
 	}
 
-	return metadata, nil
+	return nil, errors.New("fields not available")
+}
+
+func (connection *neo4jConnection) Metadata() (map[string]interface{}, error) {
+	metadata, err := valueAsGo(C.BoltConnection_metadata(connection.cInstance))
+	if err != nil {
+		return nil, err
+	}
+
+	if metadataAsGenericMap, ok := metadata.(map[string]interface{}); ok {
+		return metadataAsGenericMap, nil
+	}
+
+	return nil, errors.New("metadata is not of expected type")
 }
 
 func (connection *neo4jConnection) Data() ([]interface{}, error) {

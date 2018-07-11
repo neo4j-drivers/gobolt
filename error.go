@@ -43,6 +43,11 @@ type ConnectorError struct {
 	error int
 }
 
+// Classification returns classification of the error returned from the database
+func (failure *DatabaseError) Classification() string {
+    return failure.classification
+}
+
 // Code returns code of the error returned from the database
 func (failure *DatabaseError) Code() string {
 	return failure.code
