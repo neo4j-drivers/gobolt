@@ -176,7 +176,7 @@ func (connection *neo4jConnection) assertReadyState() error {
 		if connection.cInstance.error == C.BOLT_SERVER_FAILURE {
 			status := valueAsDictionary(C.BoltConnection_failure(connection.cInstance))
 
-			return newDatabaseError(status)
+			return NewDatabaseError(status)
 		}
 
 		return newConnectionError(connection)

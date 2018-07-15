@@ -69,7 +69,7 @@ func (failure *ConnectorError) Error() string {
 	return fmt.Sprintf("expected connection to be in READY state, where it is %d [error is %d]", failure.state, failure.error)
 }
 
-func newDatabaseError(details map[string]interface{}) error {
+func NewDatabaseError(details map[string]interface{}) error {
 	var ok bool
 	var codeInt, messageInt interface{}
 
