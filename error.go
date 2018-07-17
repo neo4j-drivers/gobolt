@@ -20,8 +20,6 @@
 package seabolt
 
 /*
-#cgo pkg-config: seabolt
-
 #include "bolt/connections.h"
 */
 import "C"

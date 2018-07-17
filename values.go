@@ -20,8 +20,6 @@
 package seabolt
 
 /*
-#cgo pkg-config: seabolt
-
 #include <stdlib.h>
 
 #include "bolt/values.h"
