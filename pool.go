@@ -20,10 +20,15 @@
 package seabolt
 
 /*
+#include <stdlib.h>
+
 #include "bolt/pooling.h"
 */
 import "C"
-import "errors"
+import (
+	"errors"
+	"unsafe"
+)
 
 // Pool represents an instance of a pool of connections
 type Pool interface {
@@ -33,10 +38,11 @@ type Pool interface {
 
 type neo4jPool struct {
 	cInstance *C.struct_BoltConnectionPool
+	cAgent *C.char
 }
 
 func (pool *neo4jPool) Acquire() (Connection, error) {
-	cInstance := C.BoltConnectionPool_acquire(pool.cInstance, nil)
+	cInstance := C.BoltConnectionPool_acquire(pool.cInstance, unsafe.Pointer(pool.cAgent))
 	if cInstance == nil {
 		return nil, newConnectFailure()
 	}
@@ -47,6 +53,10 @@ func (pool *neo4jPool) Close() error {
 	if pool.cInstance != nil {
 		C.BoltConnectionPool_destroy(pool.cInstance)
 		pool.cInstance = nil
+	}
+
+	if pool.cAgent != nil {
+		C.free(unsafe.Pointer(pool.cAgent))
 	}
 
 	return nil

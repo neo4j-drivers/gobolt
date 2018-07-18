@@ -31,6 +31,7 @@ import (
 	"net/url"
 	"sync/atomic"
 	"unsafe"
+	"sync"
 )
 
 // Connector represents an initialised seabolt connector
@@ -60,9 +61,12 @@ var initCounter int32
 type Config struct {
 	Encryption bool
 	Debug      bool
+	MaxPoolSize int
 }
 
 type neo4jConnector struct {
+	sync.Mutex
+
 	uri       *url.URL
 	authToken map[string]interface{}
 	config    Config
@@ -84,21 +88,26 @@ func (conn *neo4jConnector) Close() error {
 
 func (conn *neo4jConnector) GetPool() (Pool, error) {
 	if conn.pool == nil {
-		userAgent := C.CString("Go Driver/1.0")
-		defer C.free(unsafe.Pointer(userAgent))
+		conn.Lock()
+		defer conn.Unlock()
 
-		authTokenBoltValue := valueToConnector(conn.authToken)
-		defer C.BoltValue_destroy(authTokenBoltValue)
+		if conn.pool == nil {
+			userAgent := C.CString("Go Driver/1.0")
+			defer C.free(unsafe.Pointer(userAgent))
 
-		socketType := C.BOLT_SOCKET
-		if conn.config.Encryption {
-			socketType = C.BOLT_SECURE_SOCKET
+			authTokenBoltValue := valueToConnector(conn.authToken)
+			defer C.BoltValue_destroy(authTokenBoltValue)
+
+			socketType := C.BOLT_SOCKET
+			if conn.config.Encryption {
+				socketType = C.BOLT_SECURE_SOCKET
+			}
+
+			cInstance := C.BoltConnectionPool_create(uint32(socketType), conn.address, userAgent, authTokenBoltValue, C.uint32_t(conn.config.MaxPoolSize))
+			conn.pool = &neo4jPool{cInstance: cInstance, cAgent: C.CString("Go Connector")}
 		}
-
-		cInstance := C.BoltConnectionPool_create(uint32(socketType), conn.address, userAgent, authTokenBoltValue, 100)
-		conn.pool = &neo4jPool{cInstance: cInstance}
-		return conn.pool, nil
 	}
+
 	return conn.pool, nil
 }
 
