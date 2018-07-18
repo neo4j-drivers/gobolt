@@ -46,7 +46,7 @@ func executeQuery() {
 		"scheme":      "basic",
 		"principal":   username,
 		"credentials": password,
-	}, &seabolt.Config{Encryption: secure, Debug: debug})
+	}, &seabolt.Config{Encryption: secure, Debug: debug, MaxPoolSize: 10})
 	if err != nil {
 		panic(err)
 	}
@@ -119,12 +119,11 @@ func executeQuery() {
 	}
 
 	start = time.Now()
-	metadata, err := conn.Metadata()
+	fields, err := conn.Fields()
 	if err != nil {
 		panic(err)
 	}
 
-	fields := metadata["fields"].([]string)
 	for i := 0; i < len(fields); i++ {
 		if i > 0 {
 			fmt.Print("\t")
