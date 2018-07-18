@@ -21,6 +21,7 @@ package seabolt
 
 /*
 #include "bolt/connections.h"
+#include "bolt/pooling.h"
 */
 import "C"
 import (
@@ -35,15 +36,19 @@ type DatabaseError struct {
 	message        string
 }
 
+type PoolError struct {
+	code uint32
+}
+
 // ConnectorError represents errors that occur on the connector/client side, like network errors, etc.
 type ConnectorError struct {
-	state int
-	error int
+	state uint32
+	code  uint32
 }
 
 // Classification returns classification of the error returned from the database
 func (failure *DatabaseError) Classification() string {
-    return failure.classification
+	return failure.classification
 }
 
 // Code returns code of the error returned from the database
@@ -61,10 +66,34 @@ func (failure *DatabaseError) Error() string {
 	return fmt.Sprintf("database returned error [%s]: %s", failure.code, failure.message)
 }
 
+func (failure *ConnectorError) State() uint32 {
+	return failure.state
+}
+
+func (failure *ConnectorError) Code() uint32 {
+	return failure.code
+}
+
 // TODO: add some text description to the error message based on the state and error codes possibly from connector side
 // Error returns textual representation of the connector level error
 func (failure *ConnectorError) Error() string {
-	return fmt.Sprintf("expected connection to be in READY state, where it is %d [error is %d]", failure.state, failure.error)
+	return fmt.Sprintf("expected connection to be in READY state, where it is %d [error is %d]", failure.state, failure.code)
+}
+
+// Error returns textual representation of the error returned from the database
+func (failure *PoolError) Code() uint32 {
+	return failure.code
+}
+
+func (failure *PoolError) Error() string {
+	switch failure.code {
+	case C.POOL_FULL:
+		return "the connection pool is full"
+	case C.POOL_ADDRESS_NOT_RESOLVED:
+		return "unable to resolve provided address"
+	}
+
+	return fmt.Sprintf("unexpected connection pool error: %d", failure.code)
 }
 
 func NewDatabaseError(details map[string]interface{}) error {
@@ -90,15 +119,19 @@ func NewDatabaseError(details map[string]interface{}) error {
 }
 
 func newConnectFailure() error {
-	return newConnectionErrorWithCode(int(C.BOLT_DEFUNCT), int(C.BOLT_CONNECTION_REFUSED))
+	return newConnectionErrorWithCode(C.BOLT_DEFUNCT, C.BOLT_CONNECTION_REFUSED)
 }
 
 func newConnectionError(connection *neo4jConnection) error {
-	return newConnectionErrorWithCode(int(connection.cInstance.status), int(connection.cInstance.error))
+	return newConnectionErrorWithCode(connection.cInstance.status, connection.cInstance.error)
 }
 
-func newConnectionErrorWithCode(state int, error int) error {
-	return &ConnectorError{state: state, error: error}
+func newConnectionErrorWithCode(state uint32, code uint32) error {
+	return &ConnectorError{state: state, code: code}
+}
+
+func newPoolError(error uint32) error {
+	return &PoolError{code: error}
 }
 
 // IsDatabaseError checkes whether given err is a DatabaseError
@@ -110,6 +143,12 @@ func IsDatabaseError(err error) bool {
 // IsConnectorError checkes whether given err is a ConnectorError
 func IsConnectorError(err error) bool {
 	_, ok := err.(*ConnectorError)
+	return ok
+}
+
+// IsPoolError checkes whether given err is a PoolError
+func IsPoolError(err error) bool {
+	_, ok := err.(*PoolError)
 	return ok
 }
 
@@ -136,8 +175,16 @@ func IsServiceUnavailable(err error) bool {
 	if IsDatabaseError(err) {
 		// TODO: Add specific failure codes while adding routing driver support
 		return false
+
+	} else if IsPoolError(err) {
+		switch err.(*PoolError).code {
+		case C.POOL_FULL:
+			return true
+		case C.POOL_ADDRESS_NOT_RESOLVED:
+			return false
+		}
 	} else if IsConnectorError(err) {
-		switch err.(*ConnectorError).error {
+		switch err.(*ConnectorError).code {
 		case C.BOLT_END_OF_TRANSMISSION:
 			fallthrough
 		case C.BOLT_TLS_ERROR:

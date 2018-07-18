@@ -38,15 +38,23 @@ type Pool interface {
 
 type neo4jPool struct {
 	cInstance *C.struct_BoltConnectionPool
-	cAgent *C.char
+	cAgent    *C.char
 }
 
 func (pool *neo4jPool) Acquire() (Connection, error) {
-	cInstance := C.BoltConnectionPool_acquire(pool.cInstance, unsafe.Pointer(pool.cAgent))
-	if cInstance == nil {
+	cResult := C.BoltConnectionPool_acquire(pool.cInstance, unsafe.Pointer(pool.cAgent))
+	if cResult.status != C.POOL_NO_ERROR {
+		switch cResult.status {
+		case C.POOL_CONNECTION_ERROR:
+			return nil, newConnectionErrorWithCode(cResult.connection_status, cResult.connection_error)
+		default:
+			return nil, newPoolError(cResult.status)
+		}
+
 		return nil, newConnectFailure()
 	}
-	return &neo4jConnection{cInstance: cInstance, pool: pool}, nil
+
+	return &neo4jConnection{cInstance: cResult.connection, pool: pool}, nil
 }
 
 func (pool *neo4jPool) Close() error {

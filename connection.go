@@ -72,12 +72,12 @@ func (connection *neo4jConnection) RemoteAddress() string {
 }
 
 func (connection *neo4jConnection) Server() string {
-    server := C.BoltConnection_server(connection.cInstance)
-    if server == nil {
-        return "UNKNOWN"
-    }
+	server := C.BoltConnection_server(connection.cInstance)
+	if server == nil {
+		return "UNKNOWN"
+	}
 
-    return C.GoString(server)
+	return C.GoString(server)
 }
 
 func (connection *neo4jConnection) Begin(bookmarks []string) (RequestHandle, error) {
