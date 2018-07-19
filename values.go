@@ -261,11 +261,13 @@ func valueAsConnector(target *C.struct_BoltValue, value interface{}) {
 	case uint64:
 		intAsValue(target, int64(v))
 	case float32:
-		floatAsValue(target, float64(v))
+		floatAsValue(target, float64(v) )
 	case float64:
 		floatAsValue(target, v)
 	case string:
 		stringAsValue(target, v)
+	case []byte:
+		bytesAsValue(target, v)
 	default:
 		handled = false
 	}
@@ -312,6 +314,13 @@ func stringAsValue(target *C.struct_BoltValue, value string) {
 	str := C.CString(value)
 	C.BoltValue_format_as_String(target, str, C.int32_t(len(value)))
 	C.free(unsafe.Pointer(str))
+}
+
+func bytesAsValue(target *C.struct_BoltValue, value []byte) {
+	bytes := C.CBytes(value)
+	str := (*C.char)(bytes)
+	C.BoltValue_format_as_Bytes(target, str, C.int32_t(len(value)))
+	C.free(bytes)
 }
 
 func listAsValue(target *C.struct_BoltValue, value interface{}) {

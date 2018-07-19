@@ -29,9 +29,9 @@ package seabolt
 import "C"
 import (
 	"net/url"
-	"sync"
 	"sync/atomic"
 	"unsafe"
+	"sync"
 )
 
 // Connector represents an initialised seabolt connector
@@ -59,8 +59,8 @@ var initCounter int32
 
 // Config holds the available configurations options applicable to the connector
 type Config struct {
-	Encryption  bool
-	Debug       bool
+	Encryption bool
+	Debug      bool
 	MaxPoolSize int
 }
 
@@ -134,8 +134,8 @@ func NewConnector(uri string, authToken map[string]interface{}, config *Config) 
 
 	if config == nil {
 		config = &Config{
-			Debug:       true,
-			Encryption:  true,
+			Debug:      true,
+			Encryption: true,
 			MaxPoolSize: 100,
 		}
 	}
