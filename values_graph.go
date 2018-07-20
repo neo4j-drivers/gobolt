@@ -29,28 +29,28 @@ type NodeValue struct {
 // RelationshipValue represents a relationship in the neo4j graph database
 type RelationshipValue struct {
 	id      int64
-	startID int64
-	endID   int64
+	startId int64
+	endId   int64
 	relType string
 	props   map[string]interface{}
 }
 
 // SegmentValue represents a relationship with start and end nodes in the neo4j graph database
 type SegmentValue struct {
-	start        NodeValue
-	relationship RelationshipValue
-	end          NodeValue
+	start        *NodeValue
+	relationship *RelationshipValue
+	end          *NodeValue
 }
 
 // PathValue represents a path of nodes connected with relationships in the neo4j graph database
 type PathValue struct {
-	segments      []SegmentValue
-	nodes         []NodeValue
-	relationships []RelationshipValue
+	segments      []*SegmentValue
+	nodes         []*NodeValue
+	relationships []*RelationshipValue
 }
 
 // ID returns id of the node
-func (node *NodeValue) ID() int64 {
+func (node *NodeValue) Id() int64 {
 	return node.id
 }
 
@@ -65,18 +65,18 @@ func (node *NodeValue) Props() map[string]interface{} {
 }
 
 // ID returns id of the relationship
-func (rel *RelationshipValue) ID() int64 {
+func (rel *RelationshipValue) Id() int64 {
 	return rel.id
 }
 
 // StartID returns the id of the start node
-func (rel *RelationshipValue) StartID() int64 {
-	return rel.startID
+func (rel *RelationshipValue) StartId() int64 {
+	return rel.startId
 }
 
 // EndID returns the id of the end node
-func (rel *RelationshipValue) EndID() int64 {
-	return rel.endID
+func (rel *RelationshipValue) EndId() int64 {
+	return rel.endId
 }
 
 // Type returns the relationship tyoe
@@ -90,11 +90,11 @@ func (rel *RelationshipValue) Props() map[string]interface{} {
 }
 
 // Nodes returns the ordered list of nodes available on the path
-func (path *PathValue) Nodes() []NodeValue {
+func (path *PathValue) Nodes() []*NodeValue {
 	return path.nodes
 }
 
 // Relationships returns the ordered list of relationships on the path
-func (path *PathValue) Relationships() []RelationshipValue {
+func (path *PathValue) Relationships() []*RelationshipValue {
 	return path.relationships
 }

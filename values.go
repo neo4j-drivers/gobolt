@@ -121,7 +121,7 @@ func valueAsBytes(value *C.struct_BoltValue) []byte {
 	return C.GoBytes(unsafe.Pointer(val), C.int(value.size))
 }
 
-func valueAsNode(value *C.struct_BoltValue) NodeValue {
+func valueAsNode(value *C.struct_BoltValue) *NodeValue {
 	idValue := C.BoltStructure_value(value, 0)
 	labelsValue := C.BoltStructure_value(value, 1)
 	propsValue := C.BoltStructure_value(value, 2)
@@ -136,38 +136,38 @@ func valueAsNode(value *C.struct_BoltValue) NodeValue {
 
 	props := valueAsDictionary(propsValue)
 
-	return NodeValue{
+	return &NodeValue{
 		id:     valueAsInt(idValue),
 		labels: labels,
 		props:  props,
 	}
 }
 
-func valueAsRelationship(value *C.struct_BoltValue) RelationshipValue {
+func valueAsRelationship(value *C.struct_BoltValue) *RelationshipValue {
 	idValue := C.BoltStructure_value(value, 0)
 	startIDValue := C.BoltStructure_value(value, 1)
 	endIDValue := C.BoltStructure_value(value, 2)
 	relTypeValue := C.BoltStructure_value(value, 3)
 	propsValue := C.BoltStructure_value(value, 4)
 
-	return RelationshipValue{
+	return &RelationshipValue{
 		id:      valueAsInt(idValue),
-		startID: valueAsInt(startIDValue),
-		endID:   valueAsInt(endIDValue),
+		startId: valueAsInt(startIDValue),
+		endId:   valueAsInt(endIDValue),
 		relType: valueAsString(relTypeValue),
 		props:   valueAsDictionary(propsValue),
 	}
 }
 
-func valueAsUnboundRelationship(value *C.struct_BoltValue) RelationshipValue {
+func valueAsUnboundRelationship(value *C.struct_BoltValue) *RelationshipValue {
 	idValue := C.BoltStructure_value(value, 0)
 	relTypeValue := C.BoltStructure_value(value, 1)
 	propsValue := C.BoltStructure_value(value, 2)
 
-	return RelationshipValue{
+	return &RelationshipValue{
 		id:      valueAsInt(idValue),
-		startID: -1,
-		endID:   -1,
+		startId: -1,
+		endId:   -1,
 		relType: valueAsString(relTypeValue),
 		props:   valueAsDictionary(propsValue),
 	}
@@ -179,21 +179,21 @@ func valueAsPath(value *C.struct_BoltValue) PathValue {
 	segmentsValue := C.BoltStructure_value(value, 2)
 
 	uniqueNodesSize := int(uniqueNodesValue.size)
-	uniqueNodes := make([]NodeValue, uniqueNodesSize)
+	uniqueNodes := make([]*NodeValue, uniqueNodesSize)
 	for i := 0; i < uniqueNodesSize; i++ {
 		uniqueNodes[i] = valueAsNode(C.BoltList_value(uniqueNodesValue, C.int32_t(i)))
 	}
 
 	uniqueRelsSize := int(uniqueRelsValue.size)
-	uniqueRels := make([]RelationshipValue, uniqueRelsSize)
+	uniqueRels := make([]*RelationshipValue, uniqueRelsSize)
 	for i := 0; i < uniqueRelsSize; i++ {
 		uniqueRels[i] = valueAsRelationship(C.BoltList_value(uniqueNodesValue, C.int32_t(i)))
 	}
 
 	segmentsSize := int(segmentsValue.size) / 2
-	segments := make([]SegmentValue, segmentsSize)
-	nodes := make([]NodeValue, segmentsSize+1)
-	rels := make([]RelationshipValue, segmentsSize)
+	segments := make([]*SegmentValue, segmentsSize)
+	nodes := make([]*NodeValue, segmentsSize+1)
+	rels := make([]*RelationshipValue, segmentsSize)
 
 	prevNode := uniqueNodes[0]
 	nodes[0] = prevNode
@@ -202,20 +202,20 @@ func valueAsPath(value *C.struct_BoltValue) PathValue {
 		nextNodeIndex := valueAsInt(C.BoltList_value(segmentsValue, C.int32_t(2*i+1)))
 		nextNode := uniqueNodes[nextNodeIndex]
 
-		var rel RelationshipValue
+		var rel *RelationshipValue
 		if relID < 0 {
 			rel = uniqueRels[(-relID)-1]
-			rel.startID = prevNode.id
-			rel.endID = nextNode.id
+			rel.startId = prevNode.id
+			rel.endId = nextNode.id
 		} else {
 			rel = uniqueRels[relID-1]
-			rel.startID = prevNode.id
-			rel.endID = nextNode.id
+			rel.startId = prevNode.id
+			rel.endId = nextNode.id
 		}
 
 		nodes[i+1] = nextNode
 		rels[i] = rel
-		segments[i] = SegmentValue{start: prevNode, relationship: rel, end: nextNode}
+		segments[i] = &SegmentValue{start: prevNode, relationship: rel, end: nextNode}
 		prevNode = nextNode
 	}
 
