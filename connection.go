@@ -60,6 +60,7 @@ type Connection interface {
 type neo4jConnection struct {
 	pool      *neo4jPool
 	cInstance *C.struct_BoltConnection
+	valueSystem *boltValueSystem
 }
 
 func (connection *neo4jConnection) RemoteAddress() string {
@@ -142,7 +143,7 @@ func (connection *neo4jConnection) Run(cypher string, params *map[string]interfa
 			return -1, errors.New("unable to get cypher statement parameter value to set")
 		}
 
-		valueAsConnector(boltValue, v)
+		connection.valueSystem.valueAsConnector(boltValue, v)
 
 		i++
 	}
@@ -174,7 +175,7 @@ func (connection *neo4jConnection) DiscardAll() (RequestHandle, error) {
 func (connection *neo4jConnection) assertReadyState() error {
 	if connection.cInstance.status != C.BOLT_READY {
 		if connection.cInstance.error == C.BOLT_SERVER_FAILURE {
-			status := valueAsDictionary(C.BoltConnection_failure(connection.cInstance))
+			status := connection.valueSystem.valueAsDictionary(C.BoltConnection_failure(connection.cInstance))
 
 			return NewDatabaseError(status)
 		}
@@ -227,7 +228,7 @@ func (connection *neo4jConnection) LastBookmark() string {
 }
 
 func (connection *neo4jConnection) Fields() ([]string, error) {
-	fields, err := valueAsGo(C.BoltConnection_fields(connection.cInstance))
+	fields, err := connection.valueSystem.valueAsGo(C.BoltConnection_fields(connection.cInstance))
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +246,7 @@ func (connection *neo4jConnection) Fields() ([]string, error) {
 }
 
 func (connection *neo4jConnection) Metadata() (map[string]interface{}, error) {
-	metadata, err := valueAsGo(C.BoltConnection_metadata(connection.cInstance))
+	metadata, err := connection.valueSystem.valueAsGo(C.BoltConnection_metadata(connection.cInstance))
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +259,7 @@ func (connection *neo4jConnection) Metadata() (map[string]interface{}, error) {
 }
 
 func (connection *neo4jConnection) Data() ([]interface{}, error) {
-	fields, err := valueAsGo(C.BoltConnection_record_fields(connection.cInstance))
+	fields, err := connection.valueSystem.valueAsGo(C.BoltConnection_record_fields(connection.cInstance))
 	if err != nil {
 		return nil, err
 	}

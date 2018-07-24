@@ -37,6 +37,7 @@ type Pool interface {
 }
 
 type neo4jPool struct {
+	connector *neo4jConnector
 	cInstance *C.struct_BoltConnectionPool
 	cAgent    *C.char
 }
@@ -54,7 +55,7 @@ func (pool *neo4jPool) Acquire() (Connection, error) {
 		return nil, newConnectFailure()
 	}
 
-	return &neo4jConnection{cInstance: cResult.connection, pool: pool}, nil
+	return &neo4jConnection{cInstance: cResult.connection, pool: pool, valueSystem: pool.connector.valueSystem}, nil
 }
 
 func (pool *neo4jPool) Close() error {
