@@ -44,6 +44,7 @@ type Connection interface {
 	Run(cypher string, args *map[string]interface{}) (RequestHandle, error)
 	PullAll() (RequestHandle, error)
 	DiscardAll() (RequestHandle, error)
+	Reset() (RequestHandle, error)
 	Flush() error
 	Fetch(request RequestHandle) (FetchType, error)  // return type ?
 	FetchSummary(request RequestHandle) (int, error) // return type ?
@@ -53,7 +54,6 @@ type Connection interface {
 	Metadata() (map[string]interface{}, error)
 	Data() ([]interface{}, error)
 
-	Reset() error
 	Close() error
 }
 
@@ -267,18 +267,12 @@ func (connection *neo4jConnection) Data() ([]interface{}, error) {
 	return fields.([]interface{}), nil
 }
 
-func (connection *neo4jConnection) Reset() error {
-	res := C.BoltConnection_reset(connection.cInstance)
+func (connection *neo4jConnection) Reset() (RequestHandle, error) {
+	res := C.BoltConnection_load_reset_request(connection.cInstance)
 	if res < 0 {
-		return errors.New("unable to reset connection")
+		return -1, errors.New("unable to generate RESET message")
 	}
-
-	err := connection.assertReadyState()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
 }
 
 func (connection *neo4jConnection) Close() error {
