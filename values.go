@@ -27,9 +27,9 @@ package seabolt
 import "C"
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"unsafe"
-	"fmt"
 )
 
 type ValueHandler interface {
@@ -47,9 +47,9 @@ type ValueHandlerNotSupportedError struct {
 }
 
 type boltValueSystem struct {
-	valueHandlers []ValueHandler
+	valueHandlers            []ValueHandler
 	valueHandlersBySignature map[int8]ValueHandler
-	valueHandlersByType map[reflect.Type]ValueHandler
+	valueHandlersByType      map[reflect.Type]ValueHandler
 }
 
 func NewValueHandlerError(message string) *ValueHandlerError {
@@ -230,7 +230,20 @@ func (valueSystem *boltValueSystem) valueAsConnector(target *C.struct_BoltValue,
 		case reflect.Map:
 			valueSystem.mapAsValue(target, value)
 		default:
-			handled = false
+			// ask for value handlers
+			if handler, ok := valueSystem.valueHandlersByType[v]; ok {
+				signature, fields, err := handler.Write(value)
+				if err != nil {
+					panic(err)
+				}
+
+				C.BoltValue_format_as_Structure(target, C.int16_t(signature), C.int32_t(len(fields)))
+				for index, fieldValue := range fields {
+					valueSystem.valueAsConnector(C.BoltStructure_value(target, C.int32_t(index)), fieldValue)
+				}
+			} else {
+				handled = false
+			}
 		}
 	}
 
