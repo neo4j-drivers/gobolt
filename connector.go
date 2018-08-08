@@ -33,6 +33,7 @@ import (
 	"unsafe"
 	"sync"
 	"reflect"
+	"errors"
 )
 
 // Connector represents an initialised seabolt connector
@@ -125,13 +126,12 @@ func GetAllocationStats() (int64, int64, int64) {
 }
 
 // NewConnector returns a new connector instance with given parameters
-func NewConnector(uri string, authToken map[string]interface{}, config *Config) (connector Connector, err error) {
-	parsedURL, err := url.Parse(uri)
-	if err != nil {
-		return nil, err
+func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config) (connector Connector, err error) {
+	if uri == nil {
+		return nil, errors.New("provided uri should not be nil")
 	}
 
-	hostname, port := C.CString(parsedURL.Hostname()), C.CString(parsedURL.Port())
+	hostname, port := C.CString(uri.Hostname()), C.CString(uri.Port())
 	defer C.free(unsafe.Pointer(hostname))
 	defer C.free(unsafe.Pointer(port))
 	address := C.BoltAddress_create(hostname, port)
@@ -146,7 +146,7 @@ func NewConnector(uri string, authToken map[string]interface{}, config *Config) 
 
 	startupLibrary(config.Debug)
 	conn := &neo4jConnector{
-		uri:         parsedURL,
+		uri:         uri,
 		authToken:   authToken,
 		config:      *config,
 		address:     address,
