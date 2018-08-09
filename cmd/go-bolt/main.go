@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/neo4j-drivers/neo4j-go-connector"
+	"net/url"
 )
 
 var (
@@ -41,8 +42,13 @@ var (
 )
 
 func executeQuery() {
+	parsedUri, err := url.Parse(uri)
+	if err != nil {
+		panic(err)
+	}
+
 	start := time.Now()
-	connector, err := seabolt.NewConnector(uri, map[string]interface{}{
+	connector, err := seabolt.NewConnector(parsedUri, map[string]interface{}{
 		"scheme":      "basic",
 		"principal":   username,
 		"credentials": password,

@@ -32,6 +32,8 @@ import (
 	"sync/atomic"
 	"unsafe"
 	"sync"
+	"reflect"
+	"errors"
 )
 
 // Connector represents an initialised seabolt connector
@@ -59,9 +61,10 @@ var initCounter int32
 
 // Config holds the available configurations options applicable to the connector
 type Config struct {
-	Encryption bool
-	Debug      bool
-	MaxPoolSize int
+	Encryption    bool
+	Debug         bool
+	MaxPoolSize   int
+	ValueHandlers []ValueHandler
 }
 
 type neo4jConnector struct {
@@ -73,6 +76,8 @@ type neo4jConnector struct {
 
 	address *C.struct_BoltAddress
 	pool    *neo4jPool
+
+	valueSystem *boltValueSystem
 }
 
 func (conn *neo4jConnector) Close() error {
@@ -95,7 +100,7 @@ func (conn *neo4jConnector) GetPool() (Pool, error) {
 			userAgent := C.CString("Go Driver/1.0")
 			defer C.free(unsafe.Pointer(userAgent))
 
-			authTokenBoltValue := valueToConnector(conn.authToken)
+			authTokenBoltValue := conn.valueSystem.valueToConnector(conn.authToken)
 			defer C.BoltValue_destroy(authTokenBoltValue)
 
 			socketType := C.BOLT_SOCKET
@@ -104,7 +109,7 @@ func (conn *neo4jConnector) GetPool() (Pool, error) {
 			}
 
 			cInstance := C.BoltConnectionPool_create(uint32(socketType), conn.address, userAgent, authTokenBoltValue, C.uint32_t(conn.config.MaxPoolSize))
-			conn.pool = &neo4jPool{cInstance: cInstance, cAgent: C.CString("Go Connector")}
+			conn.pool = &neo4jPool{connector: conn, cInstance: cInstance, cAgent: C.CString("Go Connector")}
 		}
 	}
 
@@ -121,28 +126,48 @@ func GetAllocationStats() (int64, int64, int64) {
 }
 
 // NewConnector returns a new connector instance with given parameters
-func NewConnector(uri string, authToken map[string]interface{}, config *Config) (connector Connector, err error) {
-	parsedURL, err := url.Parse(uri)
-	if err != nil {
-		return nil, err
+func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config) (connector Connector, err error) {
+	if uri == nil {
+		return nil, errors.New("provided uri should not be nil")
 	}
 
-	hostname, port := C.CString(parsedURL.Hostname()), C.CString(parsedURL.Port())
+	hostname, port := C.CString(uri.Hostname()), C.CString(uri.Port())
 	defer C.free(unsafe.Pointer(hostname))
 	defer C.free(unsafe.Pointer(port))
 	address := C.BoltAddress_create(hostname, port)
 
 	if config == nil {
 		config = &Config{
-			Debug:      true,
-			Encryption: true,
+			Debug:       true,
+			Encryption:  true,
 			MaxPoolSize: 100,
 		}
 	}
 
 	startupLibrary(config.Debug)
-	conn := &neo4jConnector{uri: parsedURL, authToken: authToken, config: *config, address: address}
+	conn := &neo4jConnector{
+		uri:         uri,
+		authToken:   authToken,
+		config:      *config,
+		address:     address,
+		valueSystem: createValueSystem(config.ValueHandlers)}
 	return conn, nil
+}
+
+func createValueSystem(valueHandlers []ValueHandler) *boltValueSystem {
+	valueHandlersBySignature := make(map[int8]ValueHandler, len(valueHandlers))
+	valueHandlersByType := make(map[reflect.Type]ValueHandler, len(valueHandlers))
+	for _, handler := range valueHandlers {
+		for _, readSignature := range handler.ReadableStructs() {
+			valueHandlersBySignature[readSignature] = handler
+		}
+
+		for _, writeType := range handler.WritableTypes() {
+			valueHandlersByType[writeType] = handler
+		}
+	}
+
+	return &boltValueSystem{valueHandlers: valueHandlers, valueHandlersBySignature: valueHandlersBySignature, valueHandlersByType: valueHandlersByType}
 }
 
 func startupLibrary(debug bool) {

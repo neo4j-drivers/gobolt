@@ -44,6 +44,7 @@ type PoolError struct {
 type ConnectorError struct {
 	state uint32
 	code  uint32
+	description string
 }
 
 // Classification returns classification of the error returned from the database
@@ -72,6 +73,10 @@ func (failure *ConnectorError) State() uint32 {
 
 func (failure *ConnectorError) Code() uint32 {
 	return failure.code
+}
+
+func (failure *ConnectorError) Description() string {
+	return failure.description
 }
 
 // TODO: add some text description to the error message based on the state and error codes possibly from connector side
@@ -118,16 +123,12 @@ func NewDatabaseError(details map[string]interface{}) error {
 	return &DatabaseError{code: code, message: message, classification: classification}
 }
 
-func newConnectFailure() error {
-	return newConnectionErrorWithCode(C.BOLT_DEFUNCT, C.BOLT_CONNECTION_REFUSED)
+func newConnectionError(connection *neo4jConnection, description string) error {
+	return newConnectionErrorWithCode(connection.cInstance.status, connection.cInstance.error, description)
 }
 
-func newConnectionError(connection *neo4jConnection) error {
-	return newConnectionErrorWithCode(connection.cInstance.status, connection.cInstance.error)
-}
-
-func newConnectionErrorWithCode(state uint32, code uint32) error {
-	return &ConnectorError{state: state, code: code}
+func newConnectionErrorWithCode(state uint32, code uint32, description string) error {
+	return &ConnectorError{state: state, code: code, description: description}
 }
 
 func newPoolError(error uint32) error {
