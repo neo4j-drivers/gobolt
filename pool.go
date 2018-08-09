@@ -47,12 +47,10 @@ func (pool *neo4jPool) Acquire() (Connection, error) {
 	if cResult.status != C.POOL_NO_ERROR {
 		switch cResult.status {
 		case C.POOL_CONNECTION_ERROR:
-			return nil, newConnectionErrorWithCode(cResult.connection_status, cResult.connection_error)
+			return nil, newConnectionErrorWithCode(cResult.connection_status, cResult.connection_error, "unable to acquire connection from pool")
 		default:
 			return nil, newPoolError(cResult.status)
 		}
-
-		return nil, newConnectFailure()
 	}
 
 	return &neo4jConnection{cInstance: cResult.connection, pool: pool, valueSystem: pool.connector.valueSystem}, nil

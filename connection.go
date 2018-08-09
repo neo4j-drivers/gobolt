@@ -86,14 +86,14 @@ func (connection *neo4jConnection) Begin(bookmarks []string) (RequestHandle, err
 		bookmarkString := C.CString(bookmark)
 		defer C.free(unsafe.Pointer(bookmarkString))
 		res := C.BoltConnection_load_bookmark(connection.cInstance, bookmarkString)
-		if res < 0 {
-			return -1, errors.New("unable to load bookmark")
+		if res != C.BOLT_SUCCESS {
+			return -1, newConnectionError(connection, "unable to load bookmark")
 		}
 	}
 
 	res := C.BoltConnection_load_begin_request(connection.cInstance)
-	if res < 0 {
-		return -1, errors.New("unable to generate BEGIN message")
+	if res != C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to generate BEGIN message")
 	}
 
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
@@ -101,8 +101,8 @@ func (connection *neo4jConnection) Begin(bookmarks []string) (RequestHandle, err
 
 func (connection *neo4jConnection) Commit() (RequestHandle, error) {
 	res := C.BoltConnection_load_commit_request(connection.cInstance)
-	if res < 0 {
-		return -1, errors.New("unable to generate COMMIT message")
+	if res != C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to generate COMMIT message")
 	}
 
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
@@ -110,8 +110,8 @@ func (connection *neo4jConnection) Commit() (RequestHandle, error) {
 
 func (connection *neo4jConnection) Rollback() (RequestHandle, error) {
 	res := C.BoltConnection_load_rollback_request(connection.cInstance)
-	if res < 0 {
-		return -1, errors.New("unable to generate ROLLBACK message")
+	if res != C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to generate ROLLBACK message")
 	}
 
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
@@ -129,8 +129,8 @@ func (connection *neo4jConnection) Run(cypher string, params *map[string]interfa
 	}
 
 	res := C.BoltConnection_cypher(connection.cInstance, stmt, C.size_t(len(cypher)), C.int32_t(len(actualParams)))
-	if res < 0 {
-		return -1, errors.New("unable to set cypher statement")
+	if res != C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to set cypher statement")
 	}
 
 	i := 0
@@ -140,7 +140,7 @@ func (connection *neo4jConnection) Run(cypher string, params *map[string]interfa
 
 		boltValue := C.BoltConnection_cypher_parameter(connection.cInstance, index, key, C.size_t(len(k)))
 		if boltValue == nil {
-			return -1, errors.New("unable to get cypher statement parameter value to set")
+			return -1, newConnectionError(connection, "unable to get cypher statement parameter value to set")
 		}
 
 		connection.valueSystem.valueAsConnector(boltValue, v)
@@ -149,8 +149,8 @@ func (connection *neo4jConnection) Run(cypher string, params *map[string]interfa
 	}
 
 	res = C.BoltConnection_load_run_request(connection.cInstance)
-	if res < 0 {
-		return -1, errors.New("unable to generate RUN message")
+	if res != C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to generate RUN message")
 	}
 
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
@@ -158,16 +158,16 @@ func (connection *neo4jConnection) Run(cypher string, params *map[string]interfa
 
 func (connection *neo4jConnection) PullAll() (RequestHandle, error) {
 	res := C.BoltConnection_load_pull_request(connection.cInstance, -1)
-	if res < 0 {
-		return -1, errors.New("unable to generate PULLALL message")
+	if res != C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to generate PULLALL message")
 	}
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
 }
 
 func (connection *neo4jConnection) DiscardAll() (RequestHandle, error) {
 	res := C.BoltConnection_load_discard_request(connection.cInstance, -1)
-	if res < 0 {
-		return -1, errors.New("unable to generate DISCARDALL message")
+	if res != C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to generate DISCARDALL message")
 	}
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
 }
@@ -180,7 +180,7 @@ func (connection *neo4jConnection) assertReadyState() error {
 			return NewDatabaseError(status)
 		}
 
-		return newConnectionError(connection)
+		return newConnectionError(connection, "connection is not in READY state")
 	}
 
 	return nil
@@ -269,8 +269,8 @@ func (connection *neo4jConnection) Data() ([]interface{}, error) {
 
 func (connection *neo4jConnection) Reset() (RequestHandle, error) {
 	res := C.BoltConnection_load_reset_request(connection.cInstance)
-	if res < 0 {
-		return -1, errors.New("unable to generate RESET message")
+	if res != C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to generate RESET message")
 	}
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
 }
