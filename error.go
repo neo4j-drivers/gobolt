@@ -21,7 +21,6 @@ package seabolt
 
 /*
 #include "bolt/connections.h"
-#include "bolt/pooling.h"
 */
 import "C"
 import (
@@ -36,14 +35,10 @@ type DatabaseError struct {
 	message        string
 }
 
-type PoolError struct {
-	code uint32
-}
-
 // ConnectorError represents errors that occur on the connector/client side, like network errors, etc.
 type ConnectorError struct {
-	state uint32
-	code  uint32
+	state       uint32
+	code        uint32
 	description string
 }
 
@@ -85,22 +80,6 @@ func (failure *ConnectorError) Error() string {
 	return fmt.Sprintf("expected connection to be in READY state, where it is %d [error is %d]", failure.state, failure.code)
 }
 
-// Error returns textual representation of the error returned from the database
-func (failure *PoolError) Code() uint32 {
-	return failure.code
-}
-
-func (failure *PoolError) Error() string {
-	switch failure.code {
-	case C.POOL_FULL:
-		return "the connection pool is full"
-	case C.POOL_ADDRESS_NOT_RESOLVED:
-		return "unable to resolve provided address"
-	}
-
-	return fmt.Sprintf("unexpected connection pool error: %d", failure.code)
-}
-
 func NewDatabaseError(details map[string]interface{}) error {
 	var ok bool
 	var codeInt, messageInt interface{}
@@ -131,10 +110,6 @@ func newConnectionErrorWithCode(state uint32, code uint32, description string) e
 	return &ConnectorError{state: state, code: code, description: description}
 }
 
-func newPoolError(error uint32) error {
-	return &PoolError{code: error}
-}
-
 // IsDatabaseError checkes whether given err is a DatabaseError
 func IsDatabaseError(err error) bool {
 	_, ok := err.(*DatabaseError)
@@ -144,12 +119,6 @@ func IsDatabaseError(err error) bool {
 // IsConnectorError checkes whether given err is a ConnectorError
 func IsConnectorError(err error) bool {
 	_, ok := err.(*ConnectorError)
-	return ok
-}
-
-// IsPoolError checkes whether given err is a PoolError
-func IsPoolError(err error) bool {
-	_, ok := err.(*PoolError)
 	return ok
 }
 
@@ -176,14 +145,6 @@ func IsServiceUnavailable(err error) bool {
 	if IsDatabaseError(err) {
 		// TODO: Add specific failure codes while adding routing driver support
 		return false
-
-	} else if IsPoolError(err) {
-		switch err.(*PoolError).code {
-		case C.POOL_FULL:
-			return true
-		case C.POOL_ADDRESS_NOT_RESOLVED:
-			return false
-		}
 	} else if IsConnectorError(err) {
 		switch err.(*ConnectorError).code {
 		case C.BOLT_END_OF_TRANSMISSION:
@@ -197,6 +158,8 @@ func IsServiceUnavailable(err error) bool {
 		case C.BOLT_INTERRUPTED:
 			fallthrough
 		case C.BOLT_CONNECTION_RESET:
+			fallthrough
+		case C.BOLT_POOL_FULL:
 			fallthrough
 		case C.BOLT_TIMED_OUT:
 			return true

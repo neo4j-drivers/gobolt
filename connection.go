@@ -58,18 +58,18 @@ type Connection interface {
 }
 
 type neo4jConnection struct {
-	pool      *neo4jPool
-	cInstance *C.struct_BoltConnection
+	connector   *neo4jConnector
+	cInstance   *C.struct_BoltConnection
 	valueSystem *boltValueSystem
 }
 
 func (connection *neo4jConnection) RemoteAddress() string {
-	connectedHost := connection.cInstance.resolvedHost
-	if connectedHost == nil {
+	connectedAddress := connection.cInstance.resolved_address
+	if connectedAddress == nil {
 		return "UNKNOWN"
 	}
 
-	return fmt.Sprintf("%s:%d", C.GoString(connectedHost), int(connection.cInstance.resolvedPort))
+	return fmt.Sprintf("%s:%s", C.GoString(connectedAddress.host), C.GoString(connectedAddress.port))
 }
 
 func (connection *neo4jConnection) Server() string {
@@ -199,7 +199,7 @@ func (connection *neo4jConnection) Fetch(request RequestHandle) (FetchType, erro
 	res := C.BoltConnection_fetch(connection.cInstance, C.bolt_request_t(request))
 
 	if err := connection.assertReadyState(); err != nil {
-		return ERROR, err
+		return FetchTypeError, err
 	}
 
 	return FetchType(res), nil
@@ -276,7 +276,7 @@ func (connection *neo4jConnection) Reset() (RequestHandle, error) {
 }
 
 func (connection *neo4jConnection) Close() error {
-	err := connection.pool.release(connection)
+	err := connection.connector.release(connection)
 	if err != nil {
 		return err
 	}

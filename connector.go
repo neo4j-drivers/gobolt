@@ -23,7 +23,7 @@ package seabolt
 #include <stdlib.h>
 
 #include "bolt/lifecycle.h"
-#include "bolt/pooling.h"
+#include "bolt/connector.h"
 #include "bolt/mem.h"
 */
 import "C"
@@ -36,9 +36,16 @@ import (
 	"errors"
 )
 
+type AccessMode int
+
+const (
+	AccessModeWrite AccessMode = 0
+	AccessModeRead  AccessMode = 1
+)
+
 // Connector represents an initialised seabolt connector
 type Connector interface {
-	GetPool() (Pool, error)
+	Acquire(mode AccessMode) (Connection, error)
 	Close() error
 }
 
@@ -49,41 +56,47 @@ type RequestHandle int64
 type FetchType int
 
 const (
-	// RECORD tells that fetched data is record
-	RECORD FetchType = 1
-	// METADATA tells that fetched data is metadata
-	METADATA = 0
-	// ERROR tells that fetch was not successful
-	ERROR = -1
+	// FetchTypeRecord tells that fetched data is record
+	FetchTypeRecord FetchType = 1
+	// FetchTypeMetadata tells that fetched data is metadata
+	FetchTypeMetadata = 0
+	// FetchTypeError tells that fetch was not successful
+	FetchTypeError = -1
 )
 
 var initCounter int32
 
-// Config holds the available configurations options applicable to the connector
-type Config struct {
-	Encryption    bool
-	Debug         bool
-	MaxPoolSize   int
-	ValueHandlers []ValueHandler
-}
-
 type neo4jConnector struct {
 	sync.Mutex
+
+	key int
 
 	uri       *url.URL
 	authToken map[string]interface{}
 	config    Config
 
-	address *C.struct_BoltAddress
-	pool    *neo4jPool
+	address   *C.struct_BoltAddress
+	cInstance *C.struct_BoltConnector
+	cLogger   *C.struct_BoltLog
+	cResolver *C.struct_BoltAddressResolver
 
 	valueSystem *boltValueSystem
 }
 
 func (conn *neo4jConnector) Close() error {
-	if conn.pool != nil {
-		conn.pool.Close()
-		conn.pool = nil
+	if conn.cInstance != nil {
+		C.BoltConnector_destroy(conn.cInstance)
+		conn.cInstance = nil
+	}
+
+	if conn.cLogger != nil {
+		unregisterLogging(conn.key)
+		C.BoltLog_destroy(conn.cLogger)
+	}
+
+	if conn.cResolver != nil {
+		unregisterResolver(conn.key)
+		C.BoltAddressResolver_destroy(conn.cResolver)
 	}
 
 	C.BoltAddress_destroy(conn.address)
@@ -91,29 +104,23 @@ func (conn *neo4jConnector) Close() error {
 	return nil
 }
 
-func (conn *neo4jConnector) GetPool() (Pool, error) {
-	if conn.pool == nil {
-		conn.Lock()
-		defer conn.Unlock()
-
-		if conn.pool == nil {
-			userAgent := C.CString("Go Driver/1.0")
-			defer C.free(unsafe.Pointer(userAgent))
-
-			authTokenBoltValue := conn.valueSystem.valueToConnector(conn.authToken)
-			defer C.BoltValue_destroy(authTokenBoltValue)
-
-			socketType := C.BOLT_SOCKET
-			if conn.config.Encryption {
-				socketType = C.BOLT_SECURE_SOCKET
-			}
-
-			cInstance := C.BoltConnectionPool_create(uint32(socketType), conn.address, userAgent, authTokenBoltValue, C.uint32_t(conn.config.MaxPoolSize))
-			conn.pool = &neo4jPool{connector: conn, cInstance: cInstance, cAgent: C.CString("Go Connector")}
-		}
+func (conn *neo4jConnector) Acquire(mode AccessMode) (Connection, error) {
+	var cMode uint32 = C.BOLT_ACCESS_MODE_WRITE
+	if mode == AccessModeRead {
+		cMode = C.BOLT_ACCESS_MODE_READ
 	}
 
-	return conn.pool, nil
+	cResult := C.BoltConnector_acquire(conn.cInstance, cMode)
+	if cResult.connection == nil {
+		return nil, newConnectionErrorWithCode(cResult.connection_status, cResult.connection_error, "unable to acquire connection from connector")
+	}
+
+	return &neo4jConnection{connector: conn, cInstance: cResult.connection, valueSystem: conn.valueSystem}, nil
+}
+
+func (conn *neo4jConnector) release(connection *neo4jConnection) error {
+	C.BoltConnector_release(conn.cInstance, connection.cInstance)
+	return nil
 }
 
 // GetAllocationStats returns statistics about seabolt (C) allocations
@@ -131,26 +138,66 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 		return nil, errors.New("provided uri should not be nil")
 	}
 
-	hostname, port := C.CString(uri.Hostname()), C.CString(uri.Port())
-	defer C.free(unsafe.Pointer(hostname))
-	defer C.free(unsafe.Pointer(port))
-	address := C.BoltAddress_create(hostname, port)
-
 	if config == nil {
 		config = &Config{
-			Debug:       true,
 			Encryption:  true,
 			MaxPoolSize: 100,
 		}
 	}
 
-	startupLibrary(config.Debug)
+	valueSystem := createValueSystem(config.ValueHandlers)
+
+	var mode uint32 = C.BOLT_DIRECT
+	if uri.Scheme == "bolt+routing" {
+		mode = C.BOLT_ROUTING
+	}
+
+	var transport uint32 = C.BOLT_SOCKET
+	if config.Encryption {
+		transport = C.BOLT_SECURE_SOCKET
+	}
+
+	userAgent := C.CString("Go Driver/1.7")
+	defer C.free(unsafe.Pointer(userAgent))
+
+	routingContextValue := valueSystem.valueToConnector(uri.Query())
+	defer C.BoltValue_destroy(routingContextValue)
+
+	hostname, port := C.CString(uri.Hostname()), C.CString(uri.Port())
+	defer C.free(unsafe.Pointer(hostname))
+	defer C.free(unsafe.Pointer(port))
+
+	address := C.BoltAddress_create(hostname, port)
+
+	authTokenBoltValue := valueSystem.valueToConnector(authToken)
+	defer C.BoltValue_destroy(authTokenBoltValue)
+
+	key := startupLibrary()
+
+	cLogger := registerLogging(key, config.Log)
+	cResolver := registerResolver(key, config.AddressResolver)
+
+	cConfig := C.struct_BoltConfig{
+		mode:             mode,
+		transport:        transport,
+		user_agent:       userAgent,
+		routing_context:  routingContextValue,
+		address_resolver: cResolver,
+		log:              cLogger,
+		max_pool_size:    C.uint(config.MaxPoolSize),
+	}
+
+	cInstance := C.BoltConnector_create(address, authTokenBoltValue, &cConfig)
 	conn := &neo4jConnector{
+		key:         key,
 		uri:         uri,
 		authToken:   authToken,
 		config:      *config,
 		address:     address,
-		valueSystem: createValueSystem(config.ValueHandlers)}
+		valueSystem: createValueSystem(config.ValueHandlers),
+		cInstance:   cInstance,
+		cLogger:     cLogger,
+	}
 	return conn, nil
 }
 
@@ -170,15 +217,12 @@ func createValueSystem(valueHandlers []ValueHandler) *boltValueSystem {
 	return &boltValueSystem{valueHandlers: valueHandlers, valueHandlersBySignature: valueHandlersBySignature, valueHandlersByType: valueHandlersByType}
 }
 
-func startupLibrary(debug bool) {
-	if atomic.AddInt32(&initCounter, 1) == 1 {
-		logTarget := C.stdout
-		if !debug {
-			logTarget = nil
-		}
-
-		C.Bolt_startup(logTarget)
+func startupLibrary() int {
+	counter := atomic.AddInt32(&initCounter, 1)
+	if counter == 1 {
+		C.Bolt_startup()
 	}
+	return int(counter)
 }
 
 func shutdownLibrary() {

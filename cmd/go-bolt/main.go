@@ -23,12 +23,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
 	"github.com/neo4j-drivers/neo4j-go-connector"
 	"net/url"
+	"strings"
 )
 
 var (
@@ -37,6 +37,7 @@ var (
 	password string
 	secure   bool
 	query    string
+	mode     string
 	debug    bool
 	stats    bool
 )
@@ -47,41 +48,37 @@ func executeQuery() {
 		panic(err)
 	}
 
+	logger := simpleLogger(logLevelDebug, os.Stderr)
+
 	start := time.Now()
 	connector, err := seabolt.NewConnector(parsedUri, map[string]interface{}{
 		"scheme":      "basic",
 		"principal":   username,
 		"credentials": password,
-	}, &seabolt.Config{Encryption: secure, Debug: debug, MaxPoolSize: 10})
+	}, &seabolt.Config{Encryption: secure, MaxPoolSize: 10, Log: logger})
 	if err != nil {
 		panic(err)
 	}
 	defer connector.Close()
 	elapsed := time.Since(start)
 	if stats {
-		log.Printf("NewConnector took %s", elapsed)
+		logger.Infof("NewConnector took %s", elapsed)
+	}
+
+	accessMode := seabolt.AccessModeWrite
+	if strings.ToLower(mode) == "read" {
+		accessMode = seabolt.AccessModeRead
 	}
 
 	start = time.Now()
-	pool, err := connector.GetPool()
-	if err != nil {
-		panic(err)
-	}
-	defer pool.Close()
-	elapsed = time.Since(start)
-	if stats {
-		log.Printf("GetPool took %s", elapsed)
-	}
-
-	start = time.Now()
-	conn, err := pool.Acquire()
+	conn, err := connector.Acquire(accessMode)
 	if err != nil {
 		panic(err)
 	}
 	defer conn.Close()
 	elapsed = time.Since(start)
 	if stats {
-		log.Printf("Acquire took %s", elapsed)
+		logger.Infof("Acquire took %s", elapsed)
 	}
 
 	start = time.Now()
@@ -91,7 +88,7 @@ func executeQuery() {
 	}
 	elapsed = time.Since(start)
 	if stats {
-		log.Printf("Run took %s", elapsed)
+		logger.Infof("Run took %s", elapsed)
 	}
 
 	start = time.Now()
@@ -101,7 +98,7 @@ func executeQuery() {
 	}
 	elapsed = time.Since(start)
 	if stats {
-		log.Printf("PullAll took %s", elapsed)
+		logger.Infof("PullAll took %s", elapsed)
 	}
 
 	start = time.Now()
@@ -111,7 +108,7 @@ func executeQuery() {
 	}
 	elapsed = time.Since(start)
 	if stats {
-		log.Printf("Flush took %s", elapsed)
+		logger.Infof("Flush took %s", elapsed)
 	}
 
 	start = time.Now()
@@ -121,7 +118,7 @@ func executeQuery() {
 	}
 	elapsed = time.Since(start)
 	if stats {
-		log.Printf("FetchSummary took %s", elapsed)
+		logger.Infof("FetchSummary took %s", elapsed)
 	}
 
 	start = time.Now()
@@ -140,7 +137,7 @@ func executeQuery() {
 	fmt.Println()
 	elapsed = time.Since(start)
 	if stats {
-		log.Printf("Summary processing took %s", elapsed)
+		logger.Infof("Summary processing took %s", elapsed)
 	}
 
 	start = time.Now()
@@ -170,7 +167,7 @@ func executeQuery() {
 	}
 	elapsed = time.Since(start)
 	if stats {
-		log.Printf("Result processing took %s", elapsed)
+		logger.Infof("Result processing took %s", elapsed)
 	}
 }
 
@@ -196,6 +193,7 @@ func init() {
 
 	flag.StringVar(&password, "password", "neo4j", "bolt password")
 	flag.StringVar(&query, "query", "UNWIND RANGE(1,1000) AS N RETURN N", "cypher query to run")
+	flag.StringVar(&mode, "mode", "write", "access mode for routing mode (read or write)")
 	flag.BoolVar(&debug, "debug", true, "whether to use debug logging")
 	flag.BoolVar(&stats, "stats", true, "whether to dump allocation stats on exit")
 }
