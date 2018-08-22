@@ -77,9 +77,11 @@ func go_seabolt_log_debug_cb(state C.int, message *C.char) {
 var mapLogging sync.Map
 
 func registerLogging(key int, logging Logging) *C.struct_BoltLog {
-	if logging != nil {
-		mapLogging.Store(key, logging)
+	if logging == nil {
+		return nil
 	}
+
+	mapLogging.Store(key, logging)
 
 	boltLog := C.BoltLog_create()
 	boltLog.state = C.int(key)

@@ -75,7 +75,7 @@ type neo4jConnector struct {
 	authToken map[string]interface{}
 	config    Config
 
-	address   *C.struct_BoltAddress
+	cAddress  *C.struct_BoltAddress
 	cInstance *C.struct_BoltConnector
 	cLogger   *C.struct_BoltLog
 	cResolver *C.struct_BoltAddressResolver
@@ -92,15 +92,22 @@ func (conn *neo4jConnector) Close() error {
 	if conn.cLogger != nil {
 		unregisterLogging(conn.key)
 		C.BoltLog_destroy(conn.cLogger)
+		conn.cLogger = nil
 	}
 
 	if conn.cResolver != nil {
 		unregisterResolver(conn.key)
 		C.BoltAddressResolver_destroy(conn.cResolver)
+		conn.cResolver = nil
 	}
 
-	C.BoltAddress_destroy(conn.address)
+	if conn.cAddress != nil {
+		C.BoltAddress_destroy(conn.cAddress)
+		conn.cAddress = nil
+	}
+
 	shutdownLibrary()
+
 	return nil
 }
 
@@ -193,7 +200,7 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 		uri:         uri,
 		authToken:   authToken,
 		config:      *config,
-		address:     address,
+		cAddress:    address,
 		valueSystem: createValueSystem(config.ValueHandlers),
 		cInstance:   cInstance,
 		cLogger:     cLogger,

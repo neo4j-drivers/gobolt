@@ -77,9 +77,11 @@ func go_seabolt_server_address_resolver_cb(state C.int, address *C.struct_BoltAd
 var mapResolver sync.Map
 
 func registerResolver(key int, resolver ServerAddressResolver) *C.struct_BoltAddressResolver {
-	if resolver != nil {
-		mapResolver.Store(key, resolver)
+	if resolver == nil {
+		return nil
 	}
+
+	mapResolver.Store(key, resolver)
 
 	boltResolver := C.BoltAddressResolver_create()
 	boltResolver.state = C.int(key)
