@@ -26,7 +26,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/neo4j-drivers/neo4j-go-connector"
+	"github.com/neo4j-drivers/gobolt"
 	"net/url"
 	"strings"
 )
@@ -51,11 +51,11 @@ func executeQuery() {
 	logger := simpleLogger(logLevelDebug, os.Stderr)
 
 	start := time.Now()
-	connector, err := seabolt.NewConnector(parsedUri, map[string]interface{}{
+	connector, err := gobolt.NewConnector(parsedUri, map[string]interface{}{
 		"scheme":      "basic",
 		"principal":   username,
 		"credentials": password,
-	}, &seabolt.Config{Encryption: secure, MaxPoolSize: 10, Log: logger})
+	}, &gobolt.Config{Encryption: secure, MaxPoolSize: 10, Log: logger})
 	if err != nil {
 		panic(err)
 	}
@@ -65,9 +65,9 @@ func executeQuery() {
 		logger.Infof("NewConnector took %s", elapsed)
 	}
 
-	accessMode := seabolt.AccessModeWrite
+	accessMode := gobolt.AccessModeWrite
 	if strings.ToLower(mode) == "read" {
-		accessMode = seabolt.AccessModeRead
+		accessMode = gobolt.AccessModeRead
 	}
 
 	start = time.Now()
@@ -176,7 +176,7 @@ func main() {
 	executeQuery()
 
 	if stats {
-		current, peak, events := seabolt.GetAllocationStats()
+		current, peak, events := gobolt.GetAllocationStats()
 
 		fmt.Fprintf(os.Stderr, "=====================================\n")
 		fmt.Fprintf(os.Stderr, "current allocation	: %d bytes\n", current)

@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package seabolt
+package gobolt
 
 /*
 #include <stdlib.h>

@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package seabolt
+package gobolt
 
 // Config holds the available configurations options applicable to the connector
 type Config struct {

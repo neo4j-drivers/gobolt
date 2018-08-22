@@ -22,7 +22,7 @@ package main
 import (
 	"log"
 	"io"
-	"github.com/neo4j-drivers/neo4j-go-connector"
+	"github.com/neo4j-drivers/gobolt"
 )
 
 type logLevel int
@@ -46,7 +46,7 @@ type internalLogger struct {
 	debugLogger   *log.Logger
 }
 
-func simpleLogger(level logLevel, writer io.Writer) seabolt.Logging {
+func simpleLogger(level logLevel, writer io.Writer) gobolt.Logging {
 	return &internalLogger{
 		level:         level,
 		errorLogger:   log.New(writer, "ERROR  : ", log.Ldate|log.Ltime|log.Lmicroseconds),
