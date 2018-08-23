@@ -24,6 +24,6 @@ type Config struct {
 	Encryption      bool
 	MaxPoolSize     int
 	Log             Logging
-	AddressResolver ServerAddressResolver
+	AddressResolver UrlAddressResolver
 	ValueHandlers   []ValueHandler
 }

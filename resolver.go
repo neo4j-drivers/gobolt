@@ -29,28 +29,12 @@ import "C"
 import (
 	"sync"
 	"unsafe"
+	"net/url"
+	"fmt"
 )
 
-type ServerAddress interface {
-	Host() string
-	Port() string
-}
-
-type ServerAddressResolver interface {
-	Resolve(address ServerAddress) []ServerAddress
-}
-
-type internalServerAddress struct {
-	host string
-	port string
-}
-
-func (address *internalServerAddress) Host() string {
-	return address.host
-}
-
-func (address *internalServerAddress) Port() string {
-	return address.port
+type UrlAddressResolver interface {
+	Resolve(address *url.URL) []*url.URL
 }
 
 //export go_seabolt_server_address_resolver_cb
@@ -58,10 +42,10 @@ func go_seabolt_server_address_resolver_cb(state C.int, address *C.struct_BoltAd
 	resolver := lookupResolver(state)
 	if resolver != nil {
 		resolvedAddresses :=
-			resolver.Resolve(&internalServerAddress{host: C.GoString(address.host), port: C.GoString(address.port)})
+			resolver.Resolve(&url.URL{Host: fmt.Sprintf("%s:%s", C.GoString(address.host), C.GoString(address.port))})
 
 		for _, addr := range resolvedAddresses {
-			cHost := C.CString(addr.Host())
+			cHost := C.CString(addr.Hostname())
 			cPort := C.CString(addr.Port())
 			cAddress := C.BoltAddress_create(cHost, cPort)
 
@@ -76,7 +60,7 @@ func go_seabolt_server_address_resolver_cb(state C.int, address *C.struct_BoltAd
 
 var mapResolver sync.Map
 
-func registerResolver(key int, resolver ServerAddressResolver) *C.struct_BoltAddressResolver {
+func registerResolver(key int, resolver UrlAddressResolver) *C.struct_BoltAddressResolver {
 	if resolver == nil {
 		return nil
 	}
@@ -89,9 +73,9 @@ func registerResolver(key int, resolver ServerAddressResolver) *C.struct_BoltAdd
 	return boltResolver
 }
 
-func lookupResolver(key C.int) ServerAddressResolver {
+func lookupResolver(key C.int) UrlAddressResolver {
 	if resolver, ok := mapResolver.Load(int(key)); ok {
-		return resolver.(ServerAddressResolver)
+		return resolver.(UrlAddressResolver)
 	}
 
 	return nil
