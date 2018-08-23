@@ -174,12 +174,6 @@ func (connection *neo4jConnection) DiscardAll() (RequestHandle, error) {
 
 func (connection *neo4jConnection) assertReadyState() error {
 	if connection.cInstance.status != C.BOLT_READY {
-		if connection.cInstance.error == C.BOLT_SERVER_FAILURE {
-			status := connection.valueSystem.valueAsDictionary(C.BoltConnection_failure(connection.cInstance))
-
-			return NewDatabaseError(status)
-		}
-
 		return newConnectionError(connection, "connection is not in READY state")
 	}
 
