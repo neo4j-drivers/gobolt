@@ -82,16 +82,15 @@ func (connection *neo4jConnection) Server() string {
 }
 
 func (connection *neo4jConnection) Begin(bookmarks []string) (RequestHandle, error) {
-	for _, bookmark := range bookmarks {
-		bookmarkString := C.CString(bookmark)
-		defer C.free(unsafe.Pointer(bookmarkString))
-		res := C.BoltConnection_load_bookmark(connection.cInstance, bookmarkString)
-		if res != C.BOLT_SUCCESS {
-			return -1, newConnectionError(connection, "unable to load bookmark")
-		}
+	bookmarks_list := connection.valueSystem.valueToConnector(bookmarks)
+	defer C.BoltValue_destroy(bookmarks_list)
+
+	res := C.BoltConnection_set_begin_tx_bookmark(connection.cInstance, bookmarks_list)
+	if res!= C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to set bookmarks for BEGIN message")
 	}
 
-	res := C.BoltConnection_load_begin_request(connection.cInstance)
+	res = C.BoltConnection_load_begin_tx_request(connection.cInstance)
 	if res != C.BOLT_SUCCESS {
 		return -1, newConnectionError(connection, "unable to generate BEGIN message")
 	}
@@ -128,7 +127,7 @@ func (connection *neo4jConnection) Run(cypher string, params *map[string]interfa
 		actualParams = *params
 	}
 
-	res := C.BoltConnection_cypher(connection.cInstance, stmt, C.size_t(len(cypher)), C.int32_t(len(actualParams)))
+	res := C.BoltConnection_set_run_cypher(connection.cInstance, stmt, C.size_t(len(cypher)), C.int32_t(len(actualParams)))
 	if res != C.BOLT_SUCCESS {
 		return -1, newConnectionError(connection, "unable to set cypher statement")
 	}
@@ -138,7 +137,7 @@ func (connection *neo4jConnection) Run(cypher string, params *map[string]interfa
 		index := C.int32_t(i)
 		key := C.CString(k)
 
-		boltValue := C.BoltConnection_cypher_parameter(connection.cInstance, index, key, C.size_t(len(k)))
+		boltValue := C.BoltConnection_set_run_cypher_parameter(connection.cInstance, index, key, C.size_t(len(k)))
 		if boltValue == nil {
 			return -1, newConnectionError(connection, "unable to get cypher statement parameter value to set")
 		}
@@ -190,7 +189,7 @@ func (connection *neo4jConnection) Flush() error {
 }
 
 func (connection *neo4jConnection) Fetch(request RequestHandle) (FetchType, error) {
-	res := C.BoltConnection_fetch(connection.cInstance, C.bolt_request_t(request))
+	res := C.BoltConnection_fetch(connection.cInstance, C.bolt_request(request))
 
 	if err := connection.assertReadyState(); err != nil {
 		return FetchTypeError, err
@@ -200,7 +199,7 @@ func (connection *neo4jConnection) Fetch(request RequestHandle) (FetchType, erro
 }
 
 func (connection *neo4jConnection) FetchSummary(request RequestHandle) (int, error) {
-	res := C.BoltConnection_fetch_summary(connection.cInstance, C.bolt_request_t(request))
+	res := C.BoltConnection_fetch_summary(connection.cInstance, C.bolt_request(request))
 	if res < 0 {
 		return -1, errors.New("unable to fetch summary from connection")
 	}
@@ -222,7 +221,7 @@ func (connection *neo4jConnection) LastBookmark() string {
 }
 
 func (connection *neo4jConnection) Fields() ([]string, error) {
-	fields, err := connection.valueSystem.valueAsGo(C.BoltConnection_fields(connection.cInstance))
+	fields, err := connection.valueSystem.valueAsGo(C.BoltConnection_field_names(connection.cInstance))
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +252,7 @@ func (connection *neo4jConnection) Metadata() (map[string]interface{}, error) {
 }
 
 func (connection *neo4jConnection) Data() ([]interface{}, error) {
-	fields, err := connection.valueSystem.valueAsGo(C.BoltConnection_record_fields(connection.cInstance))
+	fields, err := connection.valueSystem.valueAsGo(C.BoltConnection_field_values(connection.cInstance))
 	if err != nil {
 		return nil, err
 	}
