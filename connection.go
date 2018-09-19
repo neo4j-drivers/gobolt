@@ -30,6 +30,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"time"
 	"unsafe"
 )
 
@@ -38,10 +39,10 @@ type Connection interface {
 	RemoteAddress() string
 	Server() string
 
-	Begin(bookmarks []string) (RequestHandle, error)
+	Begin(bookmarks []string, txTimeout time.Duration, txMetadata map[string]interface{}) (RequestHandle, error)
 	Commit() (RequestHandle, error)
 	Rollback() (RequestHandle, error)
-	Run(cypher string, args *map[string]interface{}) (RequestHandle, error)
+	Run(cypher string, args map[string]interface{}, bookmarks []string, txTimeout time.Duration, txMetadata map[string]interface{}) (RequestHandle, error)
 	PullAll() (RequestHandle, error)
 	DiscardAll() (RequestHandle, error)
 	Reset() (RequestHandle, error)
@@ -81,16 +82,41 @@ func (connection *neo4jConnection) Server() string {
 	return C.GoString(server)
 }
 
-func (connection *neo4jConnection) Begin(bookmarks []string) (RequestHandle, error) {
-	bookmarks_list := connection.valueSystem.valueToConnector(bookmarks)
-	defer C.BoltValue_destroy(bookmarks_list)
+func (connection *neo4jConnection) Begin(bookmarks []string, txTimeout time.Duration, txMetadata map[string]interface{}) (RequestHandle, error) {
+	var res C.int
 
-	res := C.BoltConnection_set_begin_tx_bookmark(connection.cInstance, bookmarks_list)
-	if res!= C.BOLT_SUCCESS {
-		return -1, newConnectionError(connection, "unable to set bookmarks for BEGIN message")
+	res = C.BoltConnection_clear_begin(connection.cInstance)
+	if res != C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to clear BEGIN message")
 	}
 
-	res = C.BoltConnection_load_begin_tx_request(connection.cInstance)
+	if len(bookmarks) > 0 {
+		bookmarks_value := connection.valueSystem.valueToConnector(bookmarks)
+		res := C.BoltConnection_set_begin_bookmarks(connection.cInstance, bookmarks_value)
+		C.BoltValue_destroy(bookmarks_value)
+		if res != C.BOLT_SUCCESS {
+			return -1, newConnectionError(connection, "unable to set bookmarks for BEGIN message")
+		}
+	}
+
+	if txTimeout > 0 {
+		timeOut := C.int64_t(txTimeout / time.Millisecond)
+		res := C.BoltConnection_set_begin_tx_timeout(connection.cInstance, timeOut)
+		if res != C.BOLT_SUCCESS {
+			return -1, newConnectionError(connection, "unable to set tx timeout for BEGIN message")
+		}
+	}
+
+	if len(txMetadata) > 0 {
+		metadata_value := connection.valueSystem.valueToConnector(txMetadata)
+		res := C.BoltConnection_set_begin_tx_metadata(connection.cInstance, metadata_value)
+		C.BoltValue_destroy(metadata_value)
+		if res != C.BOLT_SUCCESS {
+			return -1, newConnectionError(connection, "unable to set tx metadata for BEGIN message")
+		}
+	}
+
+	res = C.BoltConnection_load_begin_request(connection.cInstance)
 	if res != C.BOLT_SUCCESS {
 		return -1, newConnectionError(connection, "unable to generate BEGIN message")
 	}
@@ -116,35 +142,61 @@ func (connection *neo4jConnection) Rollback() (RequestHandle, error) {
 	return RequestHandle(C.BoltConnection_last_request(connection.cInstance)), nil
 }
 
-func (connection *neo4jConnection) Run(cypher string, params *map[string]interface{}) (RequestHandle, error) {
-	stmt := C.CString(cypher)
-	defer C.free(unsafe.Pointer(stmt))
+func (connection *neo4jConnection) Run(cypher string, params map[string]interface{}, bookmarks []string, txTimeout time.Duration, txMetadata map[string]interface{}) (RequestHandle, error) {
+	var res C.int
 
-	var actualParams map[string]interface{}
-	if params == nil {
-		actualParams = map[string]interface{}(nil)
-	} else {
-		actualParams = *params
+	res = C.BoltConnection_clear_run(connection.cInstance)
+	if res != C.BOLT_SUCCESS {
+		return -1, newConnectionError(connection, "unable to clear RUN message")
 	}
 
-	res := C.BoltConnection_set_run_cypher(connection.cInstance, stmt, C.size_t(len(cypher)), C.int32_t(len(actualParams)))
+	cypherStr := C.CString(cypher)
+	res = C.BoltConnection_set_run_cypher(connection.cInstance, cypherStr, C.size_t(len(cypher)), C.int32_t(len(params)))
+	C.free(unsafe.Pointer(cypherStr))
 	if res != C.BOLT_SUCCESS {
 		return -1, newConnectionError(connection, "unable to set cypher statement")
 	}
 
-	i := 0
-	for k, v := range actualParams {
-		index := C.int32_t(i)
-		key := C.CString(k)
+	var index C.int32_t = 0
+	for paramName, paramValue := range params {
+		paramNameLen := C.size_t(len(paramName))
+		paramNameStr := C.CString(paramName)
 
-		boltValue := C.BoltConnection_set_run_cypher_parameter(connection.cInstance, index, key, C.size_t(len(k)))
+		boltValue := C.BoltConnection_set_run_cypher_parameter(connection.cInstance, index, paramNameStr, paramNameLen)
+		C.free(unsafe.Pointer(paramNameStr))
 		if boltValue == nil {
 			return -1, newConnectionError(connection, "unable to get cypher statement parameter value to set")
 		}
 
-		connection.valueSystem.valueAsConnector(boltValue, v)
+		connection.valueSystem.valueAsConnector(boltValue, paramValue)
 
-		i++
+		index++
+	}
+
+	if len(bookmarks) > 0 {
+		bookmarks_value := connection.valueSystem.valueToConnector(bookmarks)
+		res := C.BoltConnection_set_run_bookmarks(connection.cInstance, bookmarks_value)
+		C.BoltValue_destroy(bookmarks_value)
+		if res != C.BOLT_SUCCESS {
+			return -1, newConnectionError(connection, "unable to set bookmarks for RUN message")
+		}
+	}
+
+	if txTimeout > 0 {
+		timeOut := C.int64_t(txTimeout / time.Millisecond)
+		res := C.BoltConnection_set_run_tx_timeout(connection.cInstance, timeOut)
+		if res != C.BOLT_SUCCESS {
+			return -1, newConnectionError(connection, "unable to set tx timeout for RUN message")
+		}
+	}
+
+	if len(txMetadata) > 0 {
+		metadata_value := connection.valueSystem.valueToConnector(txMetadata)
+		res := C.BoltConnection_set_run_tx_metadata(connection.cInstance, metadata_value)
+		C.BoltValue_destroy(metadata_value)
+		if res != C.BOLT_SUCCESS {
+			return -1, newConnectionError(connection, "unable to set tx metadata for RUN message")
+		}
 	}
 
 	res = C.BoltConnection_load_run_request(connection.cInstance)

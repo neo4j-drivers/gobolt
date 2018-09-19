@@ -164,37 +164,27 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 		transport = C.BOLT_SECURE_SOCKET
 	}
 
-	userAgent := C.CString("Go Driver/1.7")
-	defer C.free(unsafe.Pointer(userAgent))
-
+	userAgentStr := C.CString("Go Driver/1.7")
 	routingContextValue := valueSystem.valueToConnector(uri.Query())
-	defer C.BoltValue_destroy(routingContextValue)
-
-	hostname, port := C.CString(uri.Hostname()), C.CString(uri.Port())
-	defer C.free(unsafe.Pointer(hostname))
-	defer C.free(unsafe.Pointer(port))
-
-	address := C.BoltAddress_create(hostname, port)
-
-	authTokenBoltValue := valueSystem.valueToConnector(authToken)
-	defer C.BoltValue_destroy(authTokenBoltValue)
+	hostnameStr, portStr := C.CString(uri.Hostname()), C.CString(uri.Port())
+	address := C.BoltAddress_create(hostnameStr, portStr)
+	authTokenValue := valueSystem.valueToConnector(authToken)
 
 	key := startupLibrary()
 
 	cLogger := registerLogging(key, config.Log)
 	cResolver := registerResolver(key, config.AddressResolver)
-
 	cConfig := C.struct_BoltConfig{
 		mode:             mode,
 		transport:        transport,
-		user_agent:       userAgent,
+		user_agent:       userAgentStr,
 		routing_context:  routingContextValue,
 		address_resolver: cResolver,
 		log:              cLogger,
 		max_pool_size:    C.uint(config.MaxPoolSize),
 	}
 
-	cInstance := C.BoltConnector_create(address, authTokenBoltValue, &cConfig)
+	cInstance := C.BoltConnector_create(address, authTokenValue, &cConfig)
 	conn := &neo4jConnector{
 		key:         key,
 		uri:         uri,
@@ -205,6 +195,14 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 		cInstance:   cInstance,
 		cLogger:     cLogger,
 	}
+
+	// do cleanup
+	C.free(unsafe.Pointer(userAgentStr))
+	C.free(unsafe.Pointer(hostnameStr))
+	C.free(unsafe.Pointer(portStr))
+	C.BoltValue_destroy(routingContextValue)
+	C.BoltValue_destroy(authTokenValue)
+
 	return conn, nil
 }
 

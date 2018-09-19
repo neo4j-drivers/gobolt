@@ -82,7 +82,7 @@ func executeQuery() {
 	}
 
 	start = time.Now()
-	runMsg, err := conn.Run(query, &map[string]interface{}{})
+	runMsg, err := conn.Run(query, nil, nil, 0, nil)
 	if err != nil {
 		panic(err)
 	}
