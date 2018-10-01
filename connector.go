@@ -28,12 +28,12 @@ package gobolt
 */
 import "C"
 import (
+	"errors"
 	"net/url"
+	"reflect"
+	"sync"
 	"sync/atomic"
 	"unsafe"
-	"sync"
-	"reflect"
-	"errors"
 )
 
 type AccessMode int
@@ -152,6 +152,31 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 		}
 	}
 
+	cTrust := (*C.struct_BoltTrust)(C.malloc(C.sizeof_struct_BoltTrust))
+	cTrust.certs = nil
+	cTrust.certs_len = 0
+	cTrust.skip_verify = 0
+	cTrust.skip_verify_hostname = 0
+
+	certsBuf, err := pemEncodeCerts(config.TLSCertificates)
+	if err != nil {
+		return nil, err
+	}
+
+	if certsBuf != nil {
+		certsBytes := certsBuf.String()
+		cTrust.certs = C.CString(certsBytes)
+		cTrust.certs_len = C.int(certsBuf.Len())
+	}
+
+	if config.TLSSkipVerify {
+		cTrust.skip_verify = 1
+	}
+
+	if config.TLSSkipVerifyHostname {
+		cTrust.skip_verify_hostname = 1
+	}
+
 	valueSystem := createValueSystem(config.ValueHandlers)
 
 	var mode uint32 = C.BOLT_DIRECT
@@ -177,6 +202,7 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 	cConfig := C.struct_BoltConfig{
 		mode:             mode,
 		transport:        transport,
+		trust:            cTrust,
 		user_agent:       userAgentStr,
 		routing_context:  routingContextValue,
 		address_resolver: cResolver,
@@ -202,6 +228,11 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 	C.free(unsafe.Pointer(portStr))
 	C.BoltValue_destroy(routingContextValue)
 	C.BoltValue_destroy(authTokenValue)
+
+	if cTrust.certs != nil {
+		C.free(unsafe.Pointer(cTrust.certs))
+	}
+	C.free(unsafe.Pointer(cTrust))
 
 	return conn, nil
 }

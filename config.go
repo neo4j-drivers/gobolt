@@ -19,11 +19,34 @@
 
 package gobolt
 
+import (
+	"bytes"
+	"crypto/x509"
+	"encoding/pem"
+)
+
 // Config holds the available configurations options applicable to the connector
 type Config struct {
-	Encryption      bool
-	MaxPoolSize     int
-	Log             Logging
-	AddressResolver UrlAddressResolver
-	ValueHandlers   []ValueHandler
+	Encryption            bool
+	TLSCertificates       []*x509.Certificate
+	TLSSkipVerify         bool
+	TLSSkipVerifyHostname bool
+	MaxPoolSize           int
+	Log                   Logging
+	AddressResolver       UrlAddressResolver
+	ValueHandlers         []ValueHandler
+}
+
+func pemEncodeCerts(certs []*x509.Certificate) (*bytes.Buffer, error) {
+	if len(certs) == 0 {
+		return nil, nil
+	}
+
+	var buf = &bytes.Buffer{}
+	for _, cert := range certs {
+		if err := pem.Encode(buf, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}); err != nil {
+			return nil, err
+		}
+	}
+	return buf, nil
 }
