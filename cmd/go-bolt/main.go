@@ -55,7 +55,7 @@ func executeQuery() {
 		"scheme":      "basic",
 		"principal":   username,
 		"credentials": password,
-	}, &gobolt.Config{Encryption: secure, MaxPoolSize: 10, Log: logger})
+	}, &gobolt.Config{Encryption: secure, TLSSkipVerify: true, TLSSkipVerifyHostname: true, MaxPoolSize: 10, Log: logger})
 	if err != nil {
 		panic(err)
 	}

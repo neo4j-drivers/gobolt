@@ -27,22 +27,19 @@ extern void go_seabolt_server_address_resolver_cb(int state, struct BoltAddress 
 */
 import "C"
 import (
+	"fmt"
+	"net/url"
 	"sync"
 	"unsafe"
-	"net/url"
-	"fmt"
 )
 
-type UrlAddressResolver interface {
-	Resolve(address *url.URL) []*url.URL
-}
+type UrlAddressResolver func(address *url.URL) []*url.URL
 
 //export go_seabolt_server_address_resolver_cb
 func go_seabolt_server_address_resolver_cb(state C.int, address *C.struct_BoltAddress, resolved *C.struct_BoltAddressSet) {
 	resolver := lookupResolver(state)
 	if resolver != nil {
-		resolvedAddresses :=
-			resolver.Resolve(&url.URL{Host: fmt.Sprintf("%s:%s", C.GoString(address.host), C.GoString(address.port))})
+		resolvedAddresses := resolver(&url.URL{Host: fmt.Sprintf("%s:%s", C.GoString(address.host), C.GoString(address.port))})
 
 		for _, addr := range resolvedAddresses {
 			cHost := C.CString(addr.Hostname())
