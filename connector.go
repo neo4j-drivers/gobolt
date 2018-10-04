@@ -33,6 +33,7 @@ import (
 	"reflect"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
@@ -177,6 +178,16 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 		cTrust.skip_verify_hostname = 1
 	}
 
+	cSocketOpts := (*C.struct_BoltSocketOptions)(C.malloc(C.sizeof_struct_BoltSocketOptions))
+	cSocketOpts.connect_timeout = C.int(config.SockConnectTimeout / time.Millisecond)
+	cSocketOpts.recv_timeout = C.int(config.SockRecvTimeout / time.Millisecond)
+	cSocketOpts.send_timeout = C.int(config.SockSendTimeout / time.Millisecond)
+	cSocketOpts.keepalive = 0
+
+	if config.SockKeepalive {
+		cSocketOpts.keepalive = 1
+	}
+
 	valueSystem := createValueSystem(config.ValueHandlers)
 
 	var mode uint32 = C.BOLT_DIRECT
@@ -200,14 +211,17 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 	cLogger := registerLogging(key, config.Log)
 	cResolver := registerResolver(key, config.AddressResolver)
 	cConfig := C.struct_BoltConfig{
-		mode:             mode,
-		transport:        transport,
-		trust:            cTrust,
-		user_agent:       userAgentStr,
-		routing_context:  routingContextValue,
-		address_resolver: cResolver,
-		log:              cLogger,
-		max_pool_size:    C.uint(config.MaxPoolSize),
+		mode:                        mode,
+		transport:                   transport,
+		trust:                       cTrust,
+		user_agent:                  userAgentStr,
+		routing_context:             routingContextValue,
+		address_resolver:            cResolver,
+		log:                         cLogger,
+		max_pool_size:               C.int(config.MaxPoolSize),
+		max_connection_lifetime:     C.int(config.MaxConnLifetime / time.Millisecond),
+		max_connection_acquire_time: C.int(config.ConnAcquisitionTimeout / time.Millisecond),
+		sock_opts:                   cSocketOpts,
 	}
 
 	cInstance := C.BoltConnector_create(address, authTokenValue, &cConfig)
@@ -233,6 +247,7 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 		C.free(unsafe.Pointer(cTrust.certs))
 	}
 	C.free(unsafe.Pointer(cTrust))
+	C.free(unsafe.Pointer(cSocketOpts))
 
 	return conn, nil
 }

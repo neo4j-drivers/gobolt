@@ -23,18 +23,25 @@ import (
 	"bytes"
 	"crypto/x509"
 	"encoding/pem"
+	"time"
 )
 
 // Config holds the available configurations options applicable to the connector
 type Config struct {
-	Encryption            bool
-	TLSCertificates       []*x509.Certificate
-	TLSSkipVerify         bool
-	TLSSkipVerifyHostname bool
-	MaxPoolSize           int
-	Log                   Logging
-	AddressResolver       UrlAddressResolver
-	ValueHandlers         []ValueHandler
+	Encryption             bool
+	TLSCertificates        []*x509.Certificate
+	TLSSkipVerify          bool
+	TLSSkipVerifyHostname  bool
+	MaxPoolSize            int
+	MaxConnLifetime        time.Duration
+	ConnAcquisitionTimeout time.Duration
+	SockConnectTimeout     time.Duration
+	SockRecvTimeout        time.Duration
+	SockSendTimeout        time.Duration
+	SockKeepalive          bool
+	Log                    Logging
+	AddressResolver        UrlAddressResolver
+	ValueHandlers          []ValueHandler
 }
 
 func pemEncodeCerts(certs []*x509.Certificate) (*bytes.Buffer, error) {
