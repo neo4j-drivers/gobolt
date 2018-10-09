@@ -37,10 +37,16 @@ import (
 	"unsafe"
 )
 
+// AccessMode is used by the routing driver to decide if a transaction should be routed to a write server
+// or a read server in a cluster. When running a transaction, a write transaction requires a server that
+// supports writes. A read transaction, on the other hand, requires a server that supports read operations.
+// This classification is key for routing driver to route transactions to a cluster correctly.
 type AccessMode int
 
 const (
+	// AccessModeWrite makes the driver return a session towards a write server
 	AccessModeWrite AccessMode = 0
+	// AccessModeRead makes the driver return a session towards a follower or a read-replica
 	AccessModeRead  AccessMode = 1
 )
 

@@ -30,6 +30,8 @@ extern void go_seabolt_log_debug_cb(int state, char* message);
 import "C"
 import "sync"
 
+// Logging is the interface that any provided logging target must satisfy for the connector
+// to use
 type Logging interface {
 	ErrorEnabled() bool
 	WarningEnabled() bool

@@ -42,6 +42,11 @@ type ConnectorError struct {
 	description string
 }
 
+// GenericError represents errors which originates from the connector wrapper itself
+type GenericError struct {
+	message string
+}
+
 // Classification returns classification of the error returned from the database
 func (failure *DatabaseError) Classification() string {
 	return failure.classification
@@ -62,14 +67,17 @@ func (failure *DatabaseError) Error() string {
 	return fmt.Sprintf("database returned error [%s]: %s", failure.code, failure.message)
 }
 
+// State returns the state of the related connection
 func (failure *ConnectorError) State() uint32 {
 	return failure.state
 }
 
+// Code returns the error code set on the related connection
 func (failure *ConnectorError) Code() uint32 {
 	return failure.code
 }
 
+// Description returns any additional description set
 func (failure *ConnectorError) Description() string {
 	return failure.description
 }
@@ -80,9 +88,17 @@ func (failure *ConnectorError) Error() string {
 	return fmt.Sprintf("expected connection to be in READY state, where it is %d [error is %d]", failure.state, failure.code)
 }
 
+// Error returns textual representation of the generic error
+func (failure *GenericError) Error() string {
+	return failure.message
+}
+
 func newConnectionError(connection *neo4jConnection, description string) error {
 	if connection.cInstance.error == C.BOLT_SERVER_FAILURE {
-		status := connection.valueSystem.valueAsDictionary(C.BoltConnection_failure(connection.cInstance))
+		status, err := connection.valueSystem.valueAsDictionary(C.BoltConnection_failure(connection.cInstance))
+		if err != nil {
+			return newGenericError("unable to construct database error: %s", err.Error())
+		}
 
 		return NewDatabaseError(status)
 	}
@@ -90,16 +106,22 @@ func newConnectionError(connection *neo4jConnection, description string) error {
 	return newConnectionErrorWithCode(connection.cInstance.status, connection.cInstance.error, description)
 }
 
+func newGenericError(format string, args ...interface{}) error {
+	return &GenericError{message: fmt.Sprintf(format, args...)}
+}
+
+// NewDatabaseError creates a new DatabaseError with provided details map consisting of
+// `code` and `message` keys
 func NewDatabaseError(details map[string]interface{}) error {
 	var ok bool
 	var codeInt, messageInt interface{}
 
 	if codeInt, ok = details["code"]; !ok {
-		return fmt.Errorf("expected 'code' key to be present in map '%v'", details)
+		return newGenericError("expected 'code' key to be present in map '%v'", details)
 	}
 
 	if messageInt, ok = details["message"]; !ok {
-		return fmt.Errorf("expected 'message' key to be present in map '%v'", details)
+		return newGenericError("expected 'message' key to be present in map '%v'", details)
 	}
 
 	code := codeInt.(string)
@@ -128,7 +150,7 @@ func IsConnectorError(err error) bool {
 	return ok
 }
 
-// IsTransientError checkes whether given err is a transient error
+// IsTransientError checks whether given err is a transient error
 func IsTransientError(err error) bool {
 	if dbErr, ok := err.(*DatabaseError); ok {
 		if dbErr.classification == "TransientError" {
@@ -146,6 +168,7 @@ func IsTransientError(err error) bool {
 	return false
 }
 
+// IsWriteError checks whether given err can be classified as a write error
 func IsWriteError(err error) bool {
 	if dbErr, ok := err.(*DatabaseError); ok {
 		switch dbErr.code {

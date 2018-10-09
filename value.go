@@ -26,44 +26,14 @@ package gobolt
 */
 import "C"
 import (
-	"errors"
-	"fmt"
 	"reflect"
 	"unsafe"
 )
-
-type ValueHandler interface {
-	ReadableStructs() []int8
-	WritableTypes() []reflect.Type
-	Read(signature int8, values []interface{}) (interface{}, error)
-	Write(value interface{}) (int8, []interface{}, error)
-}
-
-type ValueHandlerError struct {
-	message string
-}
-
-type ValueHandlerNotSupportedError struct {
-}
 
 type boltValueSystem struct {
 	valueHandlers            []ValueHandler
 	valueHandlersBySignature map[int8]ValueHandler
 	valueHandlersByType      map[reflect.Type]ValueHandler
-}
-
-func NewValueHandlerError(message string) *ValueHandlerError {
-	return &ValueHandlerError{
-		message: message,
-	}
-}
-
-func (ns *ValueHandlerError) Error() string {
-	return ns.message
-}
-
-func (ns *ValueHandlerNotSupportedError) Error() string {
-	return "not supported"
 }
 
 func (valueSystem *boltValueSystem) valueAsGo(value *C.struct_BoltValue) (interface{}, error) {
@@ -79,22 +49,27 @@ func (valueSystem *boltValueSystem) valueAsGo(value *C.struct_BoltValue) (interf
 	case value._type == C.BOLT_STRING:
 		return valueSystem.valueAsString(value), nil
 	case value._type == C.BOLT_DICTIONARY:
-		return valueSystem.valueAsDictionary(value), nil
+		return valueSystem.valueAsDictionary(value)
 	case value._type == C.BOLT_LIST:
-		return valueSystem.valueAsList(value), nil
+		return valueSystem.valueAsList(value)
 	case value._type == C.BOLT_BYTES:
 		return valueSystem.valueAsBytes(value), nil
 	case value._type == C.BOLT_STRUCTURE:
 		signature := int8(value.subtype)
 
 		if handler, ok := valueSystem.valueHandlersBySignature[signature]; ok {
-			return handler.Read(signature, valueSystem.structAsList(value))
-		} else {
-			return nil, fmt.Errorf("unsupported struct type %#x received", signature)
+			listValue, err := valueSystem.structAsList(value)
+			if err != nil {
+				return nil, err
+			}
+
+			return handler.Read(signature, listValue)
 		}
+
+		return nil, newGenericError("unsupported struct type received: %#x", signature)
 	}
 
-	return nil, errors.New("unsupported data type")
+	return nil, newGenericError("unsupported data type")
 }
 
 func (valueSystem *boltValueSystem) valueAsBoolean(value *C.struct_BoltValue) bool {
@@ -117,7 +92,7 @@ func (valueSystem *boltValueSystem) valueAsString(value *C.struct_BoltValue) str
 	return C.GoStringN(val, C.int(value.size))
 }
 
-func (valueSystem *boltValueSystem) valueAsDictionary(value *C.struct_BoltValue) map[string]interface{} {
+func (valueSystem *boltValueSystem) valueAsDictionary(value *C.struct_BoltValue) (map[string]interface{}, error) {
 	size := int(value.size)
 	dict := make(map[string]interface{}, size)
 	for i := 0; i < size; i++ {
@@ -125,42 +100,42 @@ func (valueSystem *boltValueSystem) valueAsDictionary(value *C.struct_BoltValue)
 		key := valueSystem.valueAsString(C.BoltDictionary_key(value, index))
 		value, err := valueSystem.valueAsGo(C.BoltDictionary_value(value, index))
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		dict[key] = value
 	}
-	return dict
+	return dict, nil
 }
 
-func (valueSystem *boltValueSystem) valueAsList(value *C.struct_BoltValue) []interface{} {
+func (valueSystem *boltValueSystem) valueAsList(value *C.struct_BoltValue) ([]interface{}, error) {
 	size := int(value.size)
 	list := make([]interface{}, size)
 	for i := 0; i < size; i++ {
 		index := C.int32_t(i)
 		value, err := valueSystem.valueAsGo(C.BoltList_value(value, index))
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		list[i] = value
 	}
-	return list
+	return list, nil
 }
 
-func (valueSystem *boltValueSystem) structAsList(value *C.struct_BoltValue) []interface{} {
+func (valueSystem *boltValueSystem) structAsList(value *C.struct_BoltValue) ([]interface{}, error) {
 	size := int(value.size)
 	list := make([]interface{}, size)
 	for i := 0; i < size; i++ {
 		index := C.int32_t(i)
 		value, err := valueSystem.valueAsGo(C.BoltStructure_value(value, index))
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		list[i] = value
 	}
-	return list
+	return list, nil
 }
 
 func (valueSystem *boltValueSystem) valueAsBytes(value *C.struct_BoltValue) []byte {
@@ -176,80 +151,81 @@ func (valueSystem *boltValueSystem) valueToConnector(value interface{}) *C.struc
 	return res
 }
 
-func (valueSystem *boltValueSystem) valueAsConnector(target *C.struct_BoltValue, value interface{}) {
+func (valueSystem *boltValueSystem) valueAsConnector(target *C.struct_BoltValue, value interface{}) error {
 	if value == nil {
 		C.BoltValue_format_as_Null(target)
-		return
-	}
-
-	handled := true
-	switch v := value.(type) {
-	case bool:
-		valueSystem.boolAsValue(target, v)
-	case int8:
-		valueSystem.intAsValue(target, int64(v))
-	case int16:
-		valueSystem.intAsValue(target, int64(v))
-	case int:
-		valueSystem.intAsValue(target, int64(v))
-	case int32:
-		valueSystem.intAsValue(target, int64(v))
-	case int64:
-		valueSystem.intAsValue(target, v)
-	case uint8:
-		valueSystem.intAsValue(target, int64(v))
-	case uint16:
-		valueSystem.intAsValue(target, int64(v))
-	case uint:
-		valueSystem.intAsValue(target, int64(v))
-	case uint32:
-		valueSystem.intAsValue(target, int64(v))
-	case uint64:
-		valueSystem.intAsValue(target, int64(v))
-	case float32:
-		valueSystem.floatAsValue(target, float64(v))
-	case float64:
-		valueSystem.floatAsValue(target, v)
-	case string:
-		valueSystem.stringAsValue(target, v)
-	case []byte:
-		valueSystem.bytesAsValue(target, v)
-	default:
-		handled = false
-	}
-
-	if !handled {
-		v := reflect.TypeOf(value)
-
-		handled = true
-		switch v.Kind() {
-		case reflect.Ptr:
-			valueSystem.valueAsConnector(target, reflect.ValueOf(value).Elem().Interface())
-		case reflect.Slice:
-			valueSystem.listAsValue(target, value)
-		case reflect.Map:
-			valueSystem.mapAsValue(target, value)
+	} else {
+		handled := true
+		switch v := value.(type) {
+		case bool:
+			valueSystem.boolAsValue(target, v)
+		case int8:
+			valueSystem.intAsValue(target, int64(v))
+		case int16:
+			valueSystem.intAsValue(target, int64(v))
+		case int:
+			valueSystem.intAsValue(target, int64(v))
+		case int32:
+			valueSystem.intAsValue(target, int64(v))
+		case int64:
+			valueSystem.intAsValue(target, v)
+		case uint8:
+			valueSystem.intAsValue(target, int64(v))
+		case uint16:
+			valueSystem.intAsValue(target, int64(v))
+		case uint:
+			valueSystem.intAsValue(target, int64(v))
+		case uint32:
+			valueSystem.intAsValue(target, int64(v))
+		case uint64:
+			valueSystem.intAsValue(target, int64(v))
+		case float32:
+			valueSystem.floatAsValue(target, float64(v))
+		case float64:
+			valueSystem.floatAsValue(target, v)
+		case string:
+			valueSystem.stringAsValue(target, v)
+		case []byte:
+			valueSystem.bytesAsValue(target, v)
 		default:
-			// ask for value handlers
-			if handler, ok := valueSystem.valueHandlersByType[v]; ok {
-				signature, fields, err := handler.Write(value)
-				if err != nil {
-					panic(err)
-				}
+			handled = false
+		}
 
-				C.BoltValue_format_as_Structure(target, C.int16_t(signature), C.int32_t(len(fields)))
-				for index, fieldValue := range fields {
-					valueSystem.valueAsConnector(C.BoltStructure_value(target, C.int32_t(index)), fieldValue)
+		if !handled {
+			v := reflect.TypeOf(value)
+
+			handled = true
+			switch v.Kind() {
+			case reflect.Ptr:
+				valueSystem.valueAsConnector(target, reflect.ValueOf(value).Elem().Interface())
+			case reflect.Slice:
+				valueSystem.listAsValue(target, value)
+			case reflect.Map:
+				valueSystem.mapAsValue(target, value)
+			default:
+				// ask for value handlers
+				if handler, ok := valueSystem.valueHandlersByType[v]; ok {
+					signature, fields, err := handler.Write(value)
+					if err != nil {
+						return err
+					}
+
+					C.BoltValue_format_as_Structure(target, C.int16_t(signature), C.int32_t(len(fields)))
+					for index, fieldValue := range fields {
+						valueSystem.valueAsConnector(C.BoltStructure_value(target, C.int32_t(index)), fieldValue)
+					}
+				} else {
+					handled = false
 				}
-			} else {
-				handled = false
 			}
+		}
+
+		if !handled {
+			return newGenericError("unsupported value for conversion: %v", value)
 		}
 	}
 
-	if !handled {
-		panic("not supported value for conversion")
-	}
+	return nil
 }
 
 func (valueSystem *boltValueSystem) boolAsValue(target *C.struct_BoltValue, value bool) {
@@ -282,10 +258,10 @@ func (valueSystem *boltValueSystem) bytesAsValue(target *C.struct_BoltValue, val
 	C.free(bytes)
 }
 
-func (valueSystem *boltValueSystem) listAsValue(target *C.struct_BoltValue, value interface{}) {
+func (valueSystem *boltValueSystem) listAsValue(target *C.struct_BoltValue, value interface{}) error {
 	slice := reflect.ValueOf(value)
 	if slice.Kind() != reflect.Slice {
-		panic("listAsValue invoked with a non-slice type")
+		return newGenericError("listAsValue invoked with a non-slice type: %v", value)
 	}
 
 	C.BoltValue_format_as_List(target, C.int32_t(slice.Len()))
@@ -293,12 +269,14 @@ func (valueSystem *boltValueSystem) listAsValue(target *C.struct_BoltValue, valu
 		elTarget := C.BoltList_value(target, C.int32_t(i))
 		valueSystem.valueAsConnector(elTarget, slice.Index(i).Interface())
 	}
+
+	return nil
 }
 
-func (valueSystem *boltValueSystem) mapAsValue(target *C.struct_BoltValue, value interface{}) {
+func (valueSystem *boltValueSystem) mapAsValue(target *C.struct_BoltValue, value interface{}) error {
 	dict := reflect.ValueOf(value)
 	if dict.Kind() != reflect.Map {
-		panic("mapAsValue invoked with a non-map type")
+		return newGenericError("mapAsValue invoked with a non-map type: %v", value)
 	}
 
 	C.BoltValue_format_as_Dictionary(target, C.int32_t(dict.Len()))
@@ -313,4 +291,6 @@ func (valueSystem *boltValueSystem) mapAsValue(target *C.struct_BoltValue, value
 
 		index++
 	}
+
+	return nil
 }

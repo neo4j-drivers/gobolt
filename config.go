@@ -40,7 +40,7 @@ type Config struct {
 	SockSendTimeout        time.Duration
 	SockKeepalive          bool
 	Log                    Logging
-	AddressResolver        UrlAddressResolver
+	AddressResolver        URLAddressResolver
 	ValueHandlers          []ValueHandler
 }
 

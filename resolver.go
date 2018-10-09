@@ -33,7 +33,9 @@ import (
 	"unsafe"
 )
 
-type UrlAddressResolver func(address *url.URL) []*url.URL
+// URLAddressResolver is the callback function signature that provided custom resolver
+// should adhere to
+type URLAddressResolver func(address *url.URL) []*url.URL
 
 //export go_seabolt_server_address_resolver_cb
 func go_seabolt_server_address_resolver_cb(state C.int, address *C.struct_BoltAddress, resolved *C.struct_BoltAddressSet) {
@@ -57,7 +59,7 @@ func go_seabolt_server_address_resolver_cb(state C.int, address *C.struct_BoltAd
 
 var mapResolver sync.Map
 
-func registerResolver(key int, resolver UrlAddressResolver) *C.struct_BoltAddressResolver {
+func registerResolver(key int, resolver URLAddressResolver) *C.struct_BoltAddressResolver {
 	if resolver == nil {
 		return nil
 	}
@@ -70,9 +72,9 @@ func registerResolver(key int, resolver UrlAddressResolver) *C.struct_BoltAddres
 	return boltResolver
 }
 
-func lookupResolver(key C.int) UrlAddressResolver {
+func lookupResolver(key C.int) URLAddressResolver {
 	if resolver, ok := mapResolver.Load(int(key)); ok {
-		return resolver.(UrlAddressResolver)
+		return resolver.(URLAddressResolver)
 	}
 
 	return nil

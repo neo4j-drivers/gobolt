@@ -43,7 +43,7 @@ var (
 )
 
 func executeQuery() {
-	parsedUri, err := url.Parse(uri)
+	parsedURI, err := url.Parse(uri)
 	if err != nil {
 		panic(err)
 	}
@@ -51,7 +51,7 @@ func executeQuery() {
 	logger := simpleLogger(logLevelDebug, os.Stderr)
 
 	start := time.Now()
-	connector, err := gobolt.NewConnector(parsedUri, map[string]interface{}{
+	connector, err := gobolt.NewConnector(parsedURI, map[string]interface{}{
 		"scheme":      "basic",
 		"principal":   username,
 		"credentials": password,
