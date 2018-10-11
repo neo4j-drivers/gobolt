@@ -28,6 +28,11 @@ import (
 	"strings"
 )
 
+// BoltError is a marker interface to identify neo4j errors
+type BoltError interface {
+	BoltError() bool
+}
+
 // DatabaseError represents errors returned from the server a FAILURE messages
 type DatabaseError interface {
 	// Classification returns classification of the error returned from the database
@@ -54,6 +59,8 @@ type ConnectorError interface {
 
 // GenericError represents errors which originates from the connector wrapper itself
 type GenericError interface {
+	// Message returns the underlying error message
+	Message() string
 	// Error returns textual representation of the generic error
 	Error() string
 }
@@ -74,6 +81,10 @@ type defaultGenericError struct {
 	message string
 }
 
+func (failure *defaultDatabaseError) BoltError() bool {
+	return true
+}
+
 func (failure *defaultDatabaseError) Classification() string {
 	return failure.classification
 }
@@ -90,6 +101,10 @@ func (failure *defaultDatabaseError) Error() string {
 	return fmt.Sprintf("database returned error [%s]: %s", failure.code, failure.message)
 }
 
+func (failure *defaultConnectorError) BoltError() bool {
+	return true
+}
+
 func (failure *defaultConnectorError) State() int {
 	return failure.state
 }
@@ -104,6 +119,14 @@ func (failure *defaultConnectorError) Description() string {
 
 func (failure *defaultConnectorError) Error() string {
 	return fmt.Sprintf("expected connection to be in READY state, where it is %d [error is %d]", failure.state, failure.code)
+}
+
+func (failure *defaultGenericError) BoltError() bool {
+	return true
+}
+
+func (failure *defaultGenericError) Message() string {
+	return failure.message
 }
 
 func (failure *defaultGenericError) Error() string {
@@ -160,18 +183,49 @@ func newConnectorError(state int, code int, description string) ConnectorError {
 
 // IsDatabaseError checkes whether given err is a DatabaseError
 func IsDatabaseError(err error) bool {
-	_, ok := err.(DatabaseError)
-	return ok
+	if _, ok := err.(DatabaseError); !ok {
+		return false
+	}
+
+	if _, ok := err.(BoltError); !ok {
+		return false
+	}
+
+	return true
 }
 
 // IsConnectorError checkes whether given err is a ConnectorError
 func IsConnectorError(err error) bool {
-	_, ok := err.(ConnectorError)
-	return ok
+	if _, ok := err.(ConnectorError); !ok {
+		return false
+	}
+
+	if _, ok := err.(BoltError); !ok {
+		return false
+	}
+
+	return true
+}
+
+// IsGenericError checkes whether given err is a GenericError
+func IsGenericError(err error) bool {
+	if _, ok := err.(GenericError); !ok {
+		return false
+	}
+
+	if _, ok := err.(BoltError); !ok {
+		return false
+	}
+
+	return true
 }
 
 // IsTransientError checks whether given err is a transient error
 func IsTransientError(err error) bool {
+	if _, ok := err.(BoltError); !ok {
+		return false
+	}
+
 	if dbErr, ok := err.(DatabaseError); ok {
 		if dbErr.Classification() == "TransientError" {
 			switch dbErr.Code() {
@@ -190,6 +244,10 @@ func IsTransientError(err error) bool {
 
 // IsWriteError checks whether given err can be classified as a write error
 func IsWriteError(err error) bool {
+	if _, ok := err.(BoltError); !ok {
+		return false
+	}
+
 	if dbErr, ok := err.(DatabaseError); ok {
 		switch dbErr.Code() {
 		case "Neo.ClientError.Cluster.NotALeader":
@@ -204,8 +262,12 @@ func IsWriteError(err error) bool {
 
 // IsServiceUnavailable checkes whether given err represents a service unavailable status
 func IsServiceUnavailable(err error) bool {
-	if IsConnectorError(err) {
-		switch err.(ConnectorError).Code() {
+	if _, ok := err.(BoltError); !ok {
+		return false
+	}
+
+	if connErr, ok := err.(ConnectorError); ok {
+		switch connErr.Code() {
 		case C.BOLT_INTERRUPTED:
 			fallthrough
 		case C.BOLT_CONNECTION_RESET:
@@ -233,6 +295,62 @@ func IsServiceUnavailable(err error) bool {
 		case C.BOLT_ROUTING_NO_SERVERS_TO_SELECT:
 			return true
 		}
+	}
+
+	return false
+}
+
+func IsSecurityError(err error) bool {
+	if _, ok := err.(BoltError); !ok {
+		return false
+	}
+
+	if connErr, ok := err.(ConnectorError); ok {
+		return connErr.Code() == C.BOLT_TLS_ERROR
+	}
+
+	return IsAuthenticationError(err)
+}
+
+func IsAuthenticationError(err error) bool {
+	if _, ok := err.(BoltError); !ok {
+		return false
+	}
+
+	if connErr, ok := err.(ConnectorError); ok {
+		return connErr.Code() == C.BOLT_PERMISSION_DENIED
+	}
+
+	if dbErr, ok := err.(DatabaseError); ok {
+		return dbErr.Code() == "Neo.ClientError.Security.Unauthorized"
+	}
+
+	return false
+}
+
+func IsClientError(err error) bool {
+	if _, ok := err.(BoltError); !ok {
+		return false
+	}
+
+	if dbErr, ok := err.(DatabaseError); ok {
+		if dbErr.Classification() == "ClientError" {
+			return dbErr.Code() != "Neo.ClientError.Security.Unauthorized"
+		}
+
+		return false
+	}
+
+	return IsGenericError(err)
+}
+
+func IsSessionExpired(err error) bool {
+	if _, ok := err.(BoltError); !ok {
+		return false
+	}
+
+	if connErr, ok := err.(ConnectorError); ok {
+		return connErr.Code() == C.BOLT_ROUTING_NO_SERVERS_TO_SELECT
 	}
 
 	return false
