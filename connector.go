@@ -47,7 +47,7 @@ const (
 	// AccessModeWrite makes the driver return a session towards a write server
 	AccessModeWrite AccessMode = 0
 	// AccessModeRead makes the driver return a session towards a follower or a read-replica
-	AccessModeRead  AccessMode = 1
+	AccessModeRead AccessMode = 1
 )
 
 // Connector represents an initialised seabolt connector
@@ -126,7 +126,7 @@ func (conn *neo4jConnector) Acquire(mode AccessMode) (Connection, error) {
 
 	cResult := C.BoltConnector_acquire(conn.cInstance, cMode)
 	if cResult.connection == nil {
-		return nil, newConnectionErrorWithCode(cResult.connection_status, cResult.connection_error, "unable to acquire connection from connector")
+		return nil, newConnectorError(int(cResult.connection_status), int(cResult.connection_error), "unable to acquire connection from connector")
 	}
 
 	return &neo4jConnection{connector: conn, cInstance: cResult.connection, valueSystem: conn.valueSystem}, nil
@@ -194,7 +194,7 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 		cSocketOpts.keepalive = 1
 	}
 
-	valueSystem := createValueSystem(config.ValueHandlers)
+	valueSystem := createValueSystem(config)
 
 	var mode uint32 = C.BOLT_DIRECT
 	if uri.Scheme == "bolt+routing" {
@@ -237,7 +237,7 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 		authToken:   authToken,
 		config:      *config,
 		cAddress:    address,
-		valueSystem: createValueSystem(config.ValueHandlers),
+		valueSystem: valueSystem,
 		cInstance:   cInstance,
 		cLogger:     cLogger,
 	}
@@ -258,10 +258,10 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 	return conn, nil
 }
 
-func createValueSystem(valueHandlers []ValueHandler) *boltValueSystem {
-	valueHandlersBySignature := make(map[int8]ValueHandler, len(valueHandlers))
-	valueHandlersByType := make(map[reflect.Type]ValueHandler, len(valueHandlers))
-	for _, handler := range valueHandlers {
+func createValueSystem(config *Config) *boltValueSystem {
+	valueHandlersBySignature := make(map[int8]ValueHandler, len(config.ValueHandlers))
+	valueHandlersByType := make(map[reflect.Type]ValueHandler, len(config.ValueHandlers))
+	for _, handler := range config.ValueHandlers {
 		for _, readSignature := range handler.ReadableStructs() {
 			valueHandlersBySignature[readSignature] = handler
 		}
@@ -271,7 +271,27 @@ func createValueSystem(valueHandlers []ValueHandler) *boltValueSystem {
 		}
 	}
 
-	return &boltValueSystem{valueHandlers: valueHandlers, valueHandlersBySignature: valueHandlersBySignature, valueHandlersByType: valueHandlersByType}
+	databaseErrorFactory := newDatabaseError
+	connectorErrorFactory := newConnectorError
+	genericErrorFactory := newGenericError
+	if config.DatabaseErrorFactory != nil {
+		databaseErrorFactory = config.DatabaseErrorFactory
+	}
+	if config.ConnectorErrorFactory != nil {
+		connectorErrorFactory = config.ConnectorErrorFactory
+	}
+	if config.GenericErrorFactory != nil {
+		genericErrorFactory = config.GenericErrorFactory
+	}
+
+	return &boltValueSystem{
+		valueHandlers:            config.ValueHandlers,
+		valueHandlersBySignature: valueHandlersBySignature,
+		valueHandlersByType:      valueHandlersByType,
+		connectorErrorFactory:    connectorErrorFactory,
+		databaseErrorFactory:     databaseErrorFactory,
+		genericErrorFactory:      genericErrorFactory,
+	}
 }
 
 func startupLibrary() int {

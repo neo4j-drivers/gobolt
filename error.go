@@ -29,132 +29,152 @@ import (
 )
 
 // DatabaseError represents errors returned from the server a FAILURE messages
-type DatabaseError struct {
+type DatabaseError interface {
+	// Classification returns classification of the error returned from the database
+	Classification() string
+	// Code returns code of the error returned from the database
+	Code() string
+	// Message returns message of the error returned from the database
+	Message() string
+	// Error returns textual representation of the error returned from the database
+	Error() string
+}
+
+// ConnectorError represents errors that occur on the connector/client side, like network errors, etc.
+type ConnectorError interface {
+	// State returns the state of the related connection
+	State() int
+	// Code returns the error code set on the related connection
+	Code() int
+	// Description returns any additional description set
+	Description() string
+	// Error returns textual representation of the connector level error
+	Error() string
+}
+
+// GenericError represents errors which originates from the connector wrapper itself
+type GenericError interface {
+	// Error returns textual representation of the generic error
+	Error() string
+}
+
+type defaultDatabaseError struct {
 	classification string
 	code           string
 	message        string
 }
 
-// ConnectorError represents errors that occur on the connector/client side, like network errors, etc.
-type ConnectorError struct {
-	state       uint32
-	code        uint32
+type defaultConnectorError struct {
+	state       int
+	code        int
 	description string
 }
 
-// GenericError represents errors which originates from the connector wrapper itself
-type GenericError struct {
+type defaultGenericError struct {
 	message string
 }
 
-// Classification returns classification of the error returned from the database
-func (failure *DatabaseError) Classification() string {
+func (failure *defaultDatabaseError) Classification() string {
 	return failure.classification
 }
 
-// Code returns code of the error returned from the database
-func (failure *DatabaseError) Code() string {
+func (failure *defaultDatabaseError) Code() string {
 	return failure.code
 }
 
-// Message returns message of the error returned from the database
-func (failure *DatabaseError) Message() string {
+func (failure *defaultDatabaseError) Message() string {
 	return failure.message
 }
 
-// Error returns textual representation of the error returned from the database
-func (failure *DatabaseError) Error() string {
+func (failure *defaultDatabaseError) Error() string {
 	return fmt.Sprintf("database returned error [%s]: %s", failure.code, failure.message)
 }
 
-// State returns the state of the related connection
-func (failure *ConnectorError) State() uint32 {
+func (failure *defaultConnectorError) State() int {
 	return failure.state
 }
 
-// Code returns the error code set on the related connection
-func (failure *ConnectorError) Code() uint32 {
+func (failure *defaultConnectorError) Code() int {
 	return failure.code
 }
 
-// Description returns any additional description set
-func (failure *ConnectorError) Description() string {
+func (failure *defaultConnectorError) Description() string {
 	return failure.description
 }
 
-// TODO: add some text description to the error message based on the state and error codes possibly from connector side
-// Error returns textual representation of the connector level error
-func (failure *ConnectorError) Error() string {
+func (failure *defaultConnectorError) Error() string {
 	return fmt.Sprintf("expected connection to be in READY state, where it is %d [error is %d]", failure.state, failure.code)
 }
 
-// Error returns textual representation of the generic error
-func (failure *GenericError) Error() string {
+func (failure *defaultGenericError) Error() string {
 	return failure.message
 }
 
-func newConnectionError(connection *neo4jConnection, description string) error {
+func newError(connection *neo4jConnection, description string) error {
 	if connection.cInstance.error == C.BOLT_SERVER_FAILURE {
-		status, err := connection.valueSystem.valueAsDictionary(C.BoltConnection_failure(connection.cInstance))
+		failure, err := connection.valueSystem.valueAsDictionary(C.BoltConnection_failure(connection.cInstance))
 		if err != nil {
-			return newGenericError("unable to construct database error: %s", err.Error())
+			return connection.valueSystem.genericErrorFactory("unable to construct database error: %s", err.Error())
 		}
 
-		return NewDatabaseError(status)
+		var ok bool
+		var codeInt, messageInt interface{}
+		var code, message string
+
+		if codeInt, ok = failure["code"]; !ok {
+			return connection.valueSystem.genericErrorFactory("expected 'code' key to be present in map '%v'", failure)
+		}
+		if code, ok = codeInt.(string); !ok {
+			return connection.valueSystem.genericErrorFactory("expected 'code' value to be of type 'string': '%v'", codeInt)
+		}
+
+		if messageInt, ok = failure["message"]; !ok {
+			return connection.valueSystem.genericErrorFactory("expected 'message' key to be present in map '%v'", failure)
+		}
+		if message, ok = messageInt.(string); !ok {
+			return connection.valueSystem.genericErrorFactory("expected 'message' value to be of type 'string': '%v'", messageInt)
+		}
+
+		classification := ""
+		if codeParts := strings.Split(code, "."); len(codeParts) >= 2 {
+			classification = codeParts[1]
+		}
+
+		return connection.valueSystem.databaseErrorFactory(classification, code, message)
 	}
 
-	return newConnectionErrorWithCode(connection.cInstance.status, connection.cInstance.error, description)
+	return connection.valueSystem.connectorErrorFactory(int(connection.cInstance.status), int(connection.cInstance.error), description)
 }
 
-func newGenericError(format string, args ...interface{}) error {
-	return &GenericError{message: fmt.Sprintf(format, args...)}
+func newGenericError(format string, args ...interface{}) GenericError {
+	return &defaultGenericError{message: fmt.Sprintf(format, args...)}
 }
 
-// NewDatabaseError creates a new DatabaseError with provided details map consisting of
-// `code` and `message` keys
-func NewDatabaseError(details map[string]interface{}) error {
-	var ok bool
-	var codeInt, messageInt interface{}
-
-	if codeInt, ok = details["code"]; !ok {
-		return newGenericError("expected 'code' key to be present in map '%v'", details)
-	}
-
-	if messageInt, ok = details["message"]; !ok {
-		return newGenericError("expected 'message' key to be present in map '%v'", details)
-	}
-
-	code := codeInt.(string)
-	message := messageInt.(string)
-	classification := ""
-	if codeParts := strings.Split(code, "."); len(codeParts) >= 2 {
-		classification = codeParts[1]
-	}
-
-	return &DatabaseError{code: code, message: message, classification: classification}
+func newDatabaseError(classification, code, message string) DatabaseError {
+	return &defaultDatabaseError{code: code, message: message, classification: classification}
 }
 
-func newConnectionErrorWithCode(state uint32, code uint32, description string) error {
-	return &ConnectorError{state: state, code: code, description: description}
+func newConnectorError(state int, code int, description string) ConnectorError {
+	return &defaultConnectorError{state: state, code: code, description: description}
 }
 
 // IsDatabaseError checkes whether given err is a DatabaseError
 func IsDatabaseError(err error) bool {
-	_, ok := err.(*DatabaseError)
+	_, ok := err.(DatabaseError)
 	return ok
 }
 
 // IsConnectorError checkes whether given err is a ConnectorError
 func IsConnectorError(err error) bool {
-	_, ok := err.(*ConnectorError)
+	_, ok := err.(ConnectorError)
 	return ok
 }
 
 // IsTransientError checks whether given err is a transient error
 func IsTransientError(err error) bool {
-	if dbErr, ok := err.(*DatabaseError); ok {
-		if dbErr.classification == "TransientError" {
-			switch dbErr.code {
+	if dbErr, ok := err.(DatabaseError); ok {
+		if dbErr.Classification() == "TransientError" {
+			switch dbErr.Code() {
 			case "Neo.TransientError.Transaction.Terminated":
 				fallthrough
 			case "Neo.TransientError.Transaction.LockClientStopped":
@@ -170,8 +190,8 @@ func IsTransientError(err error) bool {
 
 // IsWriteError checks whether given err can be classified as a write error
 func IsWriteError(err error) bool {
-	if dbErr, ok := err.(*DatabaseError); ok {
-		switch dbErr.code {
+	if dbErr, ok := err.(DatabaseError); ok {
+		switch dbErr.Code() {
 		case "Neo.ClientError.Cluster.NotALeader":
 			fallthrough
 		case "Neo.ClientError.General.ForbiddenOnReadOnlyDatabase":
@@ -185,7 +205,7 @@ func IsWriteError(err error) bool {
 // IsServiceUnavailable checkes whether given err represents a service unavailable status
 func IsServiceUnavailable(err error) bool {
 	if IsConnectorError(err) {
-		switch err.(*ConnectorError).code {
+		switch err.(ConnectorError).Code() {
 		case C.BOLT_INTERRUPTED:
 			fallthrough
 		case C.BOLT_CONNECTION_RESET:
