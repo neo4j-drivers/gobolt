@@ -22,6 +22,7 @@ package gobolt
 /*
 #include <stdlib.h>
 
+#include "bolt/error.h"
 #include "bolt/lifecycle.h"
 #include "bolt/connector.h"
 #include "bolt/mem.h"
@@ -126,7 +127,10 @@ func (conn *neo4jConnector) Acquire(mode AccessMode) (Connection, error) {
 
 	cResult := C.BoltConnector_acquire(conn.cInstance, cMode)
 	if cResult.connection == nil {
-		return nil, newConnectorError(int(cResult.connection_status), int(cResult.connection_error), "unable to acquire connection from connector")
+		codeText := C.GoString(C.BoltError_get_string(cResult.connection_error))
+		context := C.GoString(cResult.connection_error_ctx)
+
+		return nil, newConnectorError(int(cResult.connection_status), int(cResult.connection_error), codeText, context, "unable to acquire connection from connector")
 	}
 
 	return &neo4jConnection{connector: conn, cInstance: cResult.connection, valueSystem: conn.valueSystem}, nil

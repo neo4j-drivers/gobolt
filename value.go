@@ -34,7 +34,7 @@ type boltValueSystem struct {
 	valueHandlers            []ValueHandler
 	valueHandlersBySignature map[int8]ValueHandler
 	valueHandlersByType      map[reflect.Type]ValueHandler
-	connectorErrorFactory    func(state, code int, description string) ConnectorError
+	connectorErrorFactory    func(state, code int, codeText, context, description string) ConnectorError
 	databaseErrorFactory     func(classification, code, message string) DatabaseError
 	genericErrorFactory      func(format string, args ...interface{}) GenericError
 }

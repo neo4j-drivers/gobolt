@@ -39,7 +39,7 @@ type Config struct {
 	SockRecvTimeout        time.Duration
 	SockSendTimeout        time.Duration
 	SockKeepalive          bool
-	ConnectorErrorFactory  func(state, code int, description string) ConnectorError
+	ConnectorErrorFactory  func(state, code int, codeText, context, description string) ConnectorError
 	DatabaseErrorFactory   func(classification, code, message string) DatabaseError
 	GenericErrorFactory    func(format string, args ...interface{}) GenericError
 	Log                    Logging

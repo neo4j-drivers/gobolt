@@ -20,6 +20,7 @@
 package gobolt
 
 /*
+#include "bolt/error.h"
 #include "bolt/connections.h"
 */
 import "C"
@@ -51,6 +52,8 @@ type ConnectorError interface {
 	State() int
 	// Code returns the error code set on the related connection
 	Code() int
+	// Context returns the error context set by the connector
+	Context() string
 	// Description returns any additional description set
 	Description() string
 	// Error returns textual representation of the connector level error
@@ -74,6 +77,8 @@ type defaultDatabaseError struct {
 type defaultConnectorError struct {
 	state       int
 	code        int
+	codeText    string
+	context     string
 	description string
 }
 
@@ -113,12 +118,20 @@ func (failure *defaultConnectorError) Code() int {
 	return failure.code
 }
 
+func (failure *defaultConnectorError) Context() string {
+	return failure.context
+}
+
 func (failure *defaultConnectorError) Description() string {
 	return failure.description
 }
 
 func (failure *defaultConnectorError) Error() string {
-	return fmt.Sprintf("expected connection to be in READY state, where it is %d [error is %d]", failure.state, failure.code)
+	if failure.description != "" {
+		return fmt.Sprintf("%s: error: [%d] %s, state: %d, context: %s", failure.description, failure.code, failure.codeText, failure.state, failure.context)
+	} else {
+		return fmt.Sprintf("error: [%d] %s, state: %d, context: %s", failure.code, failure.codeText, failure.state, failure.context)
+	}
 }
 
 func (failure *defaultGenericError) BoltError() bool {
@@ -166,7 +179,10 @@ func newError(connection *neo4jConnection, description string) error {
 		return connection.valueSystem.databaseErrorFactory(classification, code, message)
 	}
 
-	return connection.valueSystem.connectorErrorFactory(int(connection.cInstance.status), int(connection.cInstance.error), description)
+	codeText := C.GoString(C.BoltError_get_string(connection.cInstance.error))
+	context := C.GoString(connection.cInstance.error_ctx)
+
+	return connection.valueSystem.connectorErrorFactory(int(connection.cInstance.status), int(connection.cInstance.error), codeText, context, description)
 }
 
 func newGenericError(format string, args ...interface{}) GenericError {
@@ -177,8 +193,8 @@ func newDatabaseError(classification, code, message string) DatabaseError {
 	return &defaultDatabaseError{code: code, message: message, classification: classification}
 }
 
-func newConnectorError(state int, code int, description string) ConnectorError {
-	return &defaultConnectorError{state: state, code: code, description: description}
+func newConnectorError(state int, code int, codeText, context, description string) ConnectorError {
+	return &defaultConnectorError{state: state, code: code, codeText: codeText, context: context, description: description}
 }
 
 // IsDatabaseError checkes whether given err is a DatabaseError

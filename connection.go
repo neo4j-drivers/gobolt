@@ -24,6 +24,7 @@ package gobolt
 
 #include <stdlib.h>
 
+#include "bolt/error.h"
 #include "bolt/connections.h"
 */
 import "C"
