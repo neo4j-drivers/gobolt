@@ -177,7 +177,7 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 	if certsBuf != nil {
 		certsBytes := certsBuf.String()
 		cTrust.certs = C.CString(certsBytes)
-		cTrust.certs_len = C.int(certsBuf.Len())
+		cTrust.certs_len = C.int32_t(certsBuf.Len())
 	}
 
 	if config.TLSSkipVerify {
