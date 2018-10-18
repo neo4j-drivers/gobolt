@@ -20,7 +20,7 @@
 package gobolt
 
 /*
-#include "bolt/logging.h"
+#include "bolt/bolt.h"
 
 extern void go_seabolt_log_error_cb(int state, char* message);
 extern void go_seabolt_log_warning_cb(int state, char* message);

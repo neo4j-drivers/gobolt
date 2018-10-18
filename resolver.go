@@ -21,7 +21,7 @@ package gobolt
 
 /*
 #include <stdlib.h>
-#include "bolt/address-resolver.h"
+#include "bolt/bolt.h"
 
 extern void go_seabolt_server_address_resolver_cb(int state, struct BoltAddress *address, struct BoltAddressSet *resolved);
 */

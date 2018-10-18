@@ -20,12 +20,11 @@
 package gobolt
 
 /*
-#cgo pkg-config: seabolt
+#cgo pkg-config: seabolt17
 
 #include <stdlib.h>
 
-#include "bolt/error.h"
-#include "bolt/connections.h"
+#include "bolt/bolt.h"
 */
 import "C"
 import (

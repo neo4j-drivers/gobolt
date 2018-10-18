@@ -20,8 +20,7 @@
 package gobolt
 
 /*
-#include "bolt/error.h"
-#include "bolt/connections.h"
+#include "bolt/bolt.h"
 */
 import "C"
 import (

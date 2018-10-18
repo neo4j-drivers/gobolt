@@ -22,10 +22,7 @@ package gobolt
 /*
 #include <stdlib.h>
 
-#include "bolt/error.h"
-#include "bolt/lifecycle.h"
-#include "bolt/connector.h"
-#include "bolt/mem.h"
+#include "bolt/bolt.h"
 */
 import "C"
 import (

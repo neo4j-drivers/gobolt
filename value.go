@@ -22,7 +22,7 @@ package gobolt
 /*
 #include <stdlib.h>
 
-#include "bolt/values.h"
+#include "bolt/bolt.h"
 */
 import "C"
 import (
