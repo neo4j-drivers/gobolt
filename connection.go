@@ -35,6 +35,7 @@ import (
 
 // Connection represents an active seabolt connection
 type Connection interface {
+	Id() string
 	RemoteAddress() string
 	Server() string
 
@@ -61,6 +62,10 @@ type neo4jConnection struct {
 	connector   *neo4jConnector
 	cInstance   *C.struct_BoltConnection
 	valueSystem *boltValueSystem
+}
+
+func (connection *neo4jConnection) Id() string {
+	return C.GoString(C.BoltConnection_id(connection.cInstance))
 }
 
 func (connection *neo4jConnection) RemoteAddress() string {
