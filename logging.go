@@ -85,32 +85,22 @@ func registerLogging(key int, logging Logging) *C.struct_BoltLog {
 
 	mapLogging.Store(key, logging)
 
-	boltLog := C.BoltLog_create()
-	boltLog.state = C.int(key)
-
-	boltLog.error_enabled = 0
+	boltLog := C.BoltLog_create(C.int(key))
 	if logging != nil && logging.ErrorEnabled() {
-		boltLog.error_enabled = 1
+		C.BoltLog_set_error_func(boltLog, C.log_func(C.go_seabolt_log_error_cb))
 	}
-	boltLog.error_logger = C.log_func(C.go_seabolt_log_error_cb)
 
-	boltLog.warning_enabled = 0
 	if logging != nil && logging.WarningEnabled() {
-		boltLog.warning_enabled = 1
+		C.BoltLog_set_warning_func(boltLog, C.log_func(C.go_seabolt_log_warning_cb))
 	}
-	boltLog.warning_logger = C.log_func(C.go_seabolt_log_warning_cb)
 
-	boltLog.info_enabled = 0
 	if logging != nil && logging.InfoEnabled() {
-		boltLog.info_enabled = 1
+		C.BoltLog_set_info_func(boltLog, C.log_func(C.go_seabolt_log_info_cb))
 	}
-	boltLog.info_logger = C.log_func(C.go_seabolt_log_info_cb)
 
-	boltLog.debug_enabled = 0
 	if logging != nil && logging.DebugEnabled() {
-		boltLog.debug_enabled = 1
+		C.BoltLog_set_debug_func(boltLog, C.log_func(C.go_seabolt_log_debug_cb))
 	}
-	boltLog.debug_logger = C.log_func(C.go_seabolt_log_debug_cb)
 
 	return boltLog
 }

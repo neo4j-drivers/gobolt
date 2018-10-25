@@ -41,14 +41,14 @@ type URLAddressResolver func(address *url.URL) []*url.URL
 func go_seabolt_server_address_resolver_cb(state C.int, address *C.struct_BoltAddress, resolved *C.struct_BoltAddressSet) {
 	resolver := lookupResolver(state)
 	if resolver != nil {
-		resolvedAddresses := resolver(&url.URL{Host: fmt.Sprintf("%s:%s", C.GoString(address.host), C.GoString(address.port))})
+		resolvedAddresses := resolver(&url.URL{Host: fmt.Sprintf("%s:%s", C.GoString(C.BoltAddress_host(address)), C.GoString(C.BoltAddress_port(address)))})
 
 		for _, addr := range resolvedAddresses {
 			cHost := C.CString(addr.Hostname())
 			cPort := C.CString(addr.Port())
 			cAddress := C.BoltAddress_create(cHost, cPort)
 
-			C.BoltAddressSet_add(resolved, *cAddress)
+			C.BoltAddressSet_add(resolved, cAddress)
 
 			C.BoltAddress_destroy(cAddress)
 			C.free(unsafe.Pointer(cHost))
@@ -66,9 +66,7 @@ func registerResolver(key int, resolver URLAddressResolver) *C.struct_BoltAddres
 
 	mapResolver.Store(key, resolver)
 
-	boltResolver := C.BoltAddressResolver_create()
-	boltResolver.state = C.int(key)
-	boltResolver.resolver = C.address_resolver_func(C.go_seabolt_server_address_resolver_cb)
+	boltResolver := C.BoltAddressResolver_create(C.int(key), C.address_resolver_func(C.go_seabolt_server_address_resolver_cb))
 	return boltResolver
 }
 

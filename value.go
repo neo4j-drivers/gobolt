@@ -32,7 +32,7 @@ import (
 
 type boltValueSystem struct {
 	valueHandlers            []ValueHandler
-	valueHandlersBySignature map[int8]ValueHandler
+	valueHandlersBySignature map[int16]ValueHandler
 	valueHandlersByType      map[reflect.Type]ValueHandler
 	connectorErrorFactory    func(state, code int, codeText, context, description string) ConnectorError
 	databaseErrorFactory     func(classification, code, message string) DatabaseError
@@ -40,25 +40,27 @@ type boltValueSystem struct {
 }
 
 func (valueSystem *boltValueSystem) valueAsGo(value *C.struct_BoltValue) (interface{}, error) {
+	valueType := C.BoltValue_type(value)
+
 	switch {
-	case value._type == C.BOLT_NULL:
+	case valueType == C.BOLT_NULL:
 		return nil, nil
-	case value._type == C.BOLT_BOOLEAN:
+	case valueType == C.BOLT_BOOLEAN:
 		return valueSystem.valueAsBoolean(value), nil
-	case value._type == C.BOLT_INTEGER:
+	case valueType == C.BOLT_INTEGER:
 		return valueSystem.valueAsInt(value), nil
-	case value._type == C.BOLT_FLOAT:
+	case valueType == C.BOLT_FLOAT:
 		return valueSystem.valueAsFloat(value), nil
-	case value._type == C.BOLT_STRING:
+	case valueType == C.BOLT_STRING:
 		return valueSystem.valueAsString(value), nil
-	case value._type == C.BOLT_DICTIONARY:
+	case valueType == C.BOLT_DICTIONARY:
 		return valueSystem.valueAsDictionary(value)
-	case value._type == C.BOLT_LIST:
+	case valueType == C.BOLT_LIST:
 		return valueSystem.valueAsList(value)
-	case value._type == C.BOLT_BYTES:
+	case valueType == C.BOLT_BYTES:
 		return valueSystem.valueAsBytes(value), nil
-	case value._type == C.BOLT_STRUCTURE:
-		signature := int8(value.subtype)
+	case valueType == C.BOLT_STRUCTURE:
+		signature := int16(C.BoltStructure_code(value))
 
 		if handler, ok := valueSystem.valueHandlersBySignature[signature]; ok {
 			listValue, err := valueSystem.structAsList(value)
@@ -92,11 +94,11 @@ func (valueSystem *boltValueSystem) valueAsFloat(value *C.struct_BoltValue) floa
 
 func (valueSystem *boltValueSystem) valueAsString(value *C.struct_BoltValue) string {
 	val := C.BoltString_get(value)
-	return C.GoStringN(val, C.int(value.size))
+	return C.GoStringN(val, C.BoltValue_size(value))
 }
 
 func (valueSystem *boltValueSystem) valueAsDictionary(value *C.struct_BoltValue) (map[string]interface{}, error) {
-	size := int(value.size)
+	size := int(C.BoltValue_size(value))
 	dict := make(map[string]interface{}, size)
 	for i := 0; i < size; i++ {
 		index := C.int32_t(i)
@@ -112,7 +114,7 @@ func (valueSystem *boltValueSystem) valueAsDictionary(value *C.struct_BoltValue)
 }
 
 func (valueSystem *boltValueSystem) valueAsList(value *C.struct_BoltValue) ([]interface{}, error) {
-	size := int(value.size)
+	size := int(C.BoltValue_size(value))
 	list := make([]interface{}, size)
 	for i := 0; i < size; i++ {
 		index := C.int32_t(i)
@@ -127,7 +129,7 @@ func (valueSystem *boltValueSystem) valueAsList(value *C.struct_BoltValue) ([]in
 }
 
 func (valueSystem *boltValueSystem) structAsList(value *C.struct_BoltValue) ([]interface{}, error) {
-	size := int(value.size)
+	size := int(C.BoltValue_size(value))
 	list := make([]interface{}, size)
 	for i := 0; i < size; i++ {
 		index := C.int32_t(i)
@@ -143,7 +145,7 @@ func (valueSystem *boltValueSystem) structAsList(value *C.struct_BoltValue) ([]i
 
 func (valueSystem *boltValueSystem) valueAsBytes(value *C.struct_BoltValue) []byte {
 	val := C.BoltBytes_get_all(value)
-	return C.GoBytes(unsafe.Pointer(val), C.int(value.size))
+	return C.GoBytes(unsafe.Pointer(val), C.BoltValue_size(value))
 }
 
 func (valueSystem *boltValueSystem) valueToConnector(value interface{}) *C.struct_BoltValue {

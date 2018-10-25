@@ -80,8 +80,8 @@ type neo4jConnector struct {
 	authToken map[string]interface{}
 	config    Config
 
-	cAddress  *C.struct_BoltAddress
-	cInstance *C.struct_BoltConnector
+	cAddress  *C.BoltAddress
+	cInstance *C.BoltConnector
 	cLogger   *C.struct_BoltLog
 	cResolver *C.struct_BoltAddressResolver
 
@@ -122,7 +122,7 @@ func (conn *neo4jConnector) Acquire(mode AccessMode) (Connection, error) {
 		cMode = C.BOLT_ACCESS_MODE_READ
 	}
 
-	cResult := C.BoltConnector_acquire(conn.cInstance, cMode)
+	cResult := C.BoltConnector_acquire(conn.cInstance, C.BoltAccessMode(cMode))
 	if cResult.connection == nil {
 		codeText := C.GoString(C.BoltError_get_string(cResult.connection_error))
 		context := C.GoString(cResult.connection_error_ctx)
@@ -140,9 +140,9 @@ func (conn *neo4jConnector) release(connection *neo4jConnection) error {
 
 // GetAllocationStats returns statistics about seabolt (C) allocations
 func GetAllocationStats() (int64, int64, int64) {
-	current := C.BoltMem_current_allocation()
-	peak := C.BoltMem_peak_allocation()
-	events := C.BoltMem_allocation_events()
+	current := C.BoltStat_memory_allocation_current()
+	peak := C.BoltStat_memory_allocation_peak()
+	events := C.BoltStat_memory_allocation_events()
 
 	return int64(current), int64(peak), int64(events)
 }
@@ -160,11 +160,10 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 		}
 	}
 
-	cTrust := (*C.struct_BoltTrust)(C.malloc(C.sizeof_struct_BoltTrust))
-	cTrust.certs = nil
-	cTrust.certs_len = 0
-	cTrust.skip_verify = 0
-	cTrust.skip_verify_hostname = 0
+	cTrust := C.BoltTrust_create()
+	C.BoltTrust_set_certs(cTrust, nil, 0)
+	C.BoltTrust_set_skip_verify(cTrust, 0)
+	C.BoltTrust_set_skip_verify_hostname(cTrust, 0)
 
 	certsBuf, err := pemEncodeCerts(config.TLSCertificates)
 	if err != nil {
@@ -173,38 +172,34 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 
 	if certsBuf != nil {
 		certsBytes := certsBuf.String()
-		cTrust.certs = C.CString(certsBytes)
-		cTrust.certs_len = C.int32_t(certsBuf.Len())
+		C.BoltTrust_set_certs(cTrust, C.CString(certsBytes), C.int(certsBuf.Len()))
 	}
 
 	if config.TLSSkipVerify {
-		cTrust.skip_verify = 1
+		C.BoltTrust_set_skip_verify(cTrust, 1)
 	}
 
 	if config.TLSSkipVerifyHostname {
-		cTrust.skip_verify_hostname = 1
+		C.BoltTrust_set_skip_verify_hostname(cTrust, 1)
 	}
 
-	cSocketOpts := (*C.struct_BoltSocketOptions)(C.malloc(C.sizeof_struct_BoltSocketOptions))
-	cSocketOpts.connect_timeout = C.int(config.SockConnectTimeout / time.Millisecond)
-	cSocketOpts.recv_timeout = C.int(config.SockRecvTimeout / time.Millisecond)
-	cSocketOpts.send_timeout = C.int(config.SockSendTimeout / time.Millisecond)
-	cSocketOpts.keepalive = 0
-
-	if config.SockKeepalive {
-		cSocketOpts.keepalive = 1
+	cSocketOpts := C.BoltSocketOptions_create()
+	C.BoltSocketOptions_set_connect_timeout(cSocketOpts, C.int(config.SockConnectTimeout/time.Millisecond))
+	C.BoltSocketOptions_set_keep_alive(cSocketOpts, 1)
+	if !config.SockKeepalive {
+		C.BoltSocketOptions_set_keep_alive(cSocketOpts, 0)
 	}
 
 	valueSystem := createValueSystem(config)
 
-	var mode uint32 = C.BOLT_DIRECT
+	var mode uint32 = C.BOLT_MODE_DIRECT
 	if uri.Scheme == "bolt+routing" {
-		mode = C.BOLT_ROUTING
+		mode = C.BOLT_MODE_ROUTING
 	}
 
-	var transport uint32 = C.BOLT_SOCKET
+	var transport uint32 = C.BOLT_TRANSPORT_PLAINTEXT
 	if config.Encryption {
-		transport = C.BOLT_SECURE_SOCKET
+		transport = C.BOLT_TRANSPORT_ENCRYPTED
 	}
 
 	userAgentStr := C.CString("Go Driver/1.7")
@@ -217,21 +212,21 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 
 	cLogger := registerLogging(key, config.Log)
 	cResolver := registerResolver(key, config.AddressResolver)
-	cConfig := C.struct_BoltConfig{
-		mode:                        mode,
-		transport:                   transport,
-		trust:                       cTrust,
-		user_agent:                  userAgentStr,
-		routing_context:             routingContextValue,
-		address_resolver:            cResolver,
-		log:                         cLogger,
-		max_pool_size:               C.int(config.MaxPoolSize),
-		max_connection_lifetime:     C.int(config.MaxConnLifetime / time.Millisecond),
-		max_connection_acquire_time: C.int(config.ConnAcquisitionTimeout / time.Millisecond),
-		sock_opts:                   cSocketOpts,
-	}
 
-	cInstance := C.BoltConnector_create(address, authTokenValue, &cConfig)
+	cConfig := C.BoltConfig_create()
+	C.BoltConfig_set_mode(cConfig, C.BoltMode(mode))
+	C.BoltConfig_set_transport(cConfig, C.BoltTransport(transport))
+	C.BoltConfig_set_trust(cConfig, cTrust)
+	C.BoltConfig_set_user_agent(cConfig, userAgentStr)
+	C.BoltConfig_set_routing_context(cConfig, routingContextValue)
+	C.BoltConfig_set_address_resolver(cConfig, cResolver)
+	C.BoltConfig_set_log(cConfig, cLogger)
+	C.BoltConfig_set_max_pool_size(cConfig, C.int(config.MaxPoolSize))
+	C.BoltConfig_set_max_connection_life_time(cConfig, C.int(config.MaxConnLifetime/time.Millisecond))
+	C.BoltConfig_set_max_connection_acquisition_time(cConfig, C.int(config.ConnAcquisitionTimeout/time.Millisecond))
+	C.BoltConfig_set_socket_options(cConfig, cSocketOpts)
+
+	cInstance := C.BoltConnector_create(address, authTokenValue, cConfig)
 	conn := &neo4jConnector{
 		key:         key,
 		uri:         uri,
@@ -249,18 +244,15 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 	C.free(unsafe.Pointer(portStr))
 	C.BoltValue_destroy(routingContextValue)
 	C.BoltValue_destroy(authTokenValue)
-
-	if cTrust.certs != nil {
-		C.free(unsafe.Pointer(cTrust.certs))
-	}
-	C.free(unsafe.Pointer(cTrust))
-	C.free(unsafe.Pointer(cSocketOpts))
+	C.BoltTrust_destroy(cTrust)
+	C.BoltSocketOptions_destroy(cSocketOpts)
+	C.BoltConfig_destroy(cConfig)
 
 	return conn, nil
 }
 
 func createValueSystem(config *Config) *boltValueSystem {
-	valueHandlersBySignature := make(map[int8]ValueHandler, len(config.ValueHandlers))
+	valueHandlersBySignature := make(map[int16]ValueHandler, len(config.ValueHandlers))
 	valueHandlersByType := make(map[reflect.Type]ValueHandler, len(config.ValueHandlers))
 	for _, handler := range config.ValueHandlers {
 		for _, readSignature := range handler.ReadableStructs() {

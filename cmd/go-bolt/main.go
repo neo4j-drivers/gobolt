@@ -23,11 +23,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
-	"time"
-
 	"github.com/neo4j-drivers/gobolt"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -39,7 +37,6 @@ var (
 	query    string
 	mode     string
 	debug    bool
-	stats    bool
 )
 
 func executeQuery() {
@@ -50,7 +47,6 @@ func executeQuery() {
 
 	logger := simpleLogger(logLevelDebug, os.Stderr)
 
-	start := time.Now()
 	connector, err := gobolt.NewConnector(parsedURI, map[string]interface{}{
 		"scheme":      "basic",
 		"principal":   username,
@@ -60,68 +56,38 @@ func executeQuery() {
 		panic(err)
 	}
 	defer connector.Close()
-	elapsed := time.Since(start)
-	if stats {
-		logger.Infof("NewConnector took %s", elapsed)
-	}
 
 	accessMode := gobolt.AccessModeWrite
 	if strings.ToLower(mode) == "read" {
 		accessMode = gobolt.AccessModeRead
 	}
 
-	start = time.Now()
 	conn, err := connector.Acquire(accessMode)
 	if err != nil {
 		panic(err)
 	}
 	defer conn.Close()
-	elapsed = time.Since(start)
-	if stats {
-		logger.Infof("Acquire took %s", elapsed)
-	}
 
-	start = time.Now()
 	runMsg, err := conn.Run(query, nil, nil, 0, nil)
 	if err != nil {
 		panic(err)
 	}
-	elapsed = time.Since(start)
-	if stats {
-		logger.Infof("Run took %s", elapsed)
-	}
 
-	start = time.Now()
 	pullAllMsg, err := conn.PullAll()
 	if err != nil {
 		panic(err)
 	}
-	elapsed = time.Since(start)
-	if stats {
-		logger.Infof("PullAll took %s", elapsed)
-	}
 
-	start = time.Now()
 	err = conn.Flush()
 	if err != nil {
 		panic(err)
 	}
-	elapsed = time.Since(start)
-	if stats {
-		logger.Infof("Flush took %s", elapsed)
-	}
 
-	start = time.Now()
 	records, err := conn.FetchSummary(runMsg)
 	if records != 0 {
 		panic(errors.New("unexpected summary fetch return"))
 	}
-	elapsed = time.Since(start)
-	if stats {
-		logger.Infof("FetchSummary took %s", elapsed)
-	}
 
-	start = time.Now()
 	fields, err := conn.Fields()
 	if err != nil {
 		panic(err)
@@ -135,12 +101,7 @@ func executeQuery() {
 		fmt.Print(fields[i])
 	}
 	fmt.Println()
-	elapsed = time.Since(start)
-	if stats {
-		logger.Infof("Summary processing took %s", elapsed)
-	}
 
-	start = time.Now()
 	for {
 		fetch, err := conn.Fetch(pullAllMsg)
 		if err != nil {
@@ -165,25 +126,19 @@ func executeQuery() {
 
 		fmt.Println()
 	}
-	elapsed = time.Since(start)
-	if stats {
-		logger.Infof("Result processing took %s", elapsed)
-	}
 }
 
 func main() {
 	flag.Parse()
 	executeQuery()
 
-	if stats {
-		current, peak, events := gobolt.GetAllocationStats()
+	current, peak, events := gobolt.GetAllocationStats()
 
-		fmt.Fprintf(os.Stderr, "=====================================\n")
-		fmt.Fprintf(os.Stderr, "current allocation	: %d bytes\n", current)
-		fmt.Fprintf(os.Stderr, "peak allocation		: %d bytes\n", peak)
-		fmt.Fprintf(os.Stderr, "allocation events	: %d\n", events)
-		fmt.Fprintf(os.Stderr, "=====================================\n")
-	}
+	fmt.Fprintf(os.Stderr, "=====================================\n")
+	fmt.Fprintf(os.Stderr, "current allocation	: %d bytes\n", current)
+	fmt.Fprintf(os.Stderr, "peak allocation		: %d bytes\n", peak)
+	fmt.Fprintf(os.Stderr, "allocation events	: %d\n", events)
+	fmt.Fprintf(os.Stderr, "=====================================\n")
 }
 
 func init() {
@@ -195,5 +150,4 @@ func init() {
 	flag.StringVar(&query, "query", "UNWIND RANGE(1,1000) AS N RETURN N", "cypher query to run")
 	flag.StringVar(&mode, "mode", "write", "access mode for routing mode (read or write)")
 	flag.BoolVar(&debug, "debug", true, "whether to use debug logging")
-	flag.BoolVar(&stats, "stats", true, "whether to dump allocation stats on exit")
 }

@@ -146,7 +146,10 @@ func (failure *defaultGenericError) Error() string {
 }
 
 func newError(connection *neo4jConnection, description string) error {
-	if connection.cInstance.error == C.BOLT_SERVER_FAILURE {
+	cStatus := C.BoltConnection_status(connection.cInstance)
+	errorCode := C.BoltStatus_get_error(cStatus)
+
+	if errorCode == C.BOLT_SERVER_FAILURE {
 		failure, err := connection.valueSystem.valueAsDictionary(C.BoltConnection_failure(connection.cInstance))
 		if err != nil {
 			return connection.valueSystem.genericErrorFactory("unable to construct database error: %s", err.Error())
@@ -178,10 +181,11 @@ func newError(connection *neo4jConnection, description string) error {
 		return connection.valueSystem.databaseErrorFactory(classification, code, message)
 	}
 
-	codeText := C.GoString(C.BoltError_get_string(connection.cInstance.error))
-	context := C.GoString(connection.cInstance.error_ctx)
+	state := C.BoltStatus_get_state(cStatus)
+	errorText := C.GoString(C.BoltError_get_string(errorCode))
+	context := C.GoString(C.BoltStatus_get_error_context(cStatus))
 
-	return connection.valueSystem.connectorErrorFactory(int(connection.cInstance.status), int(connection.cInstance.error), codeText, context, description)
+	return connection.valueSystem.connectorErrorFactory(int(state), int(errorCode), errorText, context, description)
 }
 
 func newGenericError(format string, args ...interface{}) GenericError {

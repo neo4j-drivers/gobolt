@@ -69,12 +69,12 @@ func (connection *neo4jConnection) Id() string {
 }
 
 func (connection *neo4jConnection) RemoteAddress() string {
-	connectedAddress := connection.cInstance.resolved_address
+	connectedAddress := C.BoltConnection_remote_endpoint(connection.cInstance)
 	if connectedAddress == nil {
 		return "UNKNOWN"
 	}
 
-	return fmt.Sprintf("%s:%s", C.GoString(connectedAddress.host), C.GoString(connectedAddress.port))
+	return fmt.Sprintf("%s:%s", C.GoString(C.BoltAddress_host(connectedAddress)), C.GoString(C.BoltAddress_port(connectedAddress)))
 }
 
 func (connection *neo4jConnection) Server() string {
@@ -228,7 +228,9 @@ func (connection *neo4jConnection) DiscardAll() (RequestHandle, error) {
 }
 
 func (connection *neo4jConnection) assertReadyState() error {
-	if connection.cInstance.status != C.BOLT_READY {
+	cStatus := C.BoltConnection_status(connection.cInstance)
+
+	if C.BoltStatus_get_state(cStatus) != C.BOLT_CONNECTION_STATE_READY {
 		return newError(connection, "unexpected connection state")
 	}
 
@@ -245,7 +247,7 @@ func (connection *neo4jConnection) Flush() error {
 }
 
 func (connection *neo4jConnection) Fetch(request RequestHandle) (FetchType, error) {
-	res := C.BoltConnection_fetch(connection.cInstance, C.bolt_request(request))
+	res := C.BoltConnection_fetch(connection.cInstance, C.BoltRequest(request))
 
 	if err := connection.assertReadyState(); err != nil {
 		return FetchTypeError, err
@@ -255,7 +257,7 @@ func (connection *neo4jConnection) Fetch(request RequestHandle) (FetchType, erro
 }
 
 func (connection *neo4jConnection) FetchSummary(request RequestHandle) (int, error) {
-	res := C.BoltConnection_fetch_summary(connection.cInstance, C.bolt_request(request))
+	res := C.BoltConnection_fetch_summary(connection.cInstance, C.BoltRequest(request))
 	if res < 0 {
 		return -1, newError(connection, "unable to fetch summary")
 	}

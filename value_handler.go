@@ -27,10 +27,10 @@ import (
 // ValueHandler is the interface that custom value handlers should implement to
 // support reading/writing struct types into custom types
 type ValueHandler interface {
-	ReadableStructs() []int8
+	ReadableStructs() []int16
 	WritableTypes() []reflect.Type
-	Read(signature int8, values []interface{}) (interface{}, error)
-	Write(value interface{}) (int8, []interface{}, error)
+	Read(signature int16, values []interface{}) (interface{}, error)
+	Write(value interface{}) (int16, []interface{}, error)
 }
 
 // ValueHandlerError is the special error that ValueHandlers should return in
