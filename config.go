@@ -36,8 +36,6 @@ type Config struct {
 	MaxConnLifetime        time.Duration
 	ConnAcquisitionTimeout time.Duration
 	SockConnectTimeout     time.Duration
-	SockRecvTimeout        time.Duration
-	SockSendTimeout        time.Duration
 	SockKeepalive          bool
 	ConnectorErrorFactory  func(state, code int, codeText, context, description string) ConnectorError
 	DatabaseErrorFactory   func(classification, code, message string) DatabaseError
