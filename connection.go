@@ -20,8 +20,6 @@
 package gobolt
 
 /*
-#cgo pkg-config: seabolt17
-
 #include <stdlib.h>
 
 #include "bolt/bolt.h"
