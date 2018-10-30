@@ -23,7 +23,7 @@ package gobolt
 #include <stdlib.h>
 #include "bolt/bolt.h"
 
-extern void go_seabolt_server_address_resolver_cb(int state, struct BoltAddress *address, struct BoltAddressSet *resolved);
+extern void go_seabolt_server_address_resolver_cb(void* state, struct BoltAddress *address, struct BoltAddressSet *resolved);
 */
 import "C"
 import (
@@ -38,7 +38,7 @@ import (
 type URLAddressResolver func(address *url.URL) []*url.URL
 
 //export go_seabolt_server_address_resolver_cb
-func go_seabolt_server_address_resolver_cb(state C.int, address *C.struct_BoltAddress, resolved *C.struct_BoltAddressSet) {
+func go_seabolt_server_address_resolver_cb(state unsafe.Pointer, address *C.struct_BoltAddress, resolved *C.struct_BoltAddressSet) {
 	resolver := lookupResolver(state)
 	if resolver != nil {
 		resolvedAddresses := resolver(&url.URL{Host: fmt.Sprintf("%s:%s", C.GoString(C.BoltAddress_host(address)), C.GoString(C.BoltAddress_port(address)))})
@@ -66,12 +66,12 @@ func registerResolver(key int, resolver URLAddressResolver) *C.struct_BoltAddres
 
 	mapResolver.Store(key, resolver)
 
-	boltResolver := C.BoltAddressResolver_create(C.int(key), C.address_resolver_func(C.go_seabolt_server_address_resolver_cb))
+	boltResolver := C.BoltAddressResolver_create(unsafe.Pointer(&key), C.address_resolver_func(C.go_seabolt_server_address_resolver_cb))
 	return boltResolver
 }
 
-func lookupResolver(key C.int) URLAddressResolver {
-	if resolver, ok := mapResolver.Load(int(key)); ok {
+func lookupResolver(key unsafe.Pointer) URLAddressResolver {
+	if resolver, ok := mapResolver.Load(*(*int)(key)); ok {
 		return resolver.(URLAddressResolver)
 	}
 

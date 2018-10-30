@@ -122,15 +122,19 @@ func (conn *neo4jConnector) Acquire(mode AccessMode) (Connection, error) {
 		cMode = C.BOLT_ACCESS_MODE_READ
 	}
 
-	cResult := C.BoltConnector_acquire(conn.cInstance, C.BoltAccessMode(cMode))
-	if cResult.connection == nil {
-		codeText := C.GoString(C.BoltError_get_string(cResult.connection_error))
-		context := C.GoString(cResult.connection_error_ctx)
+	cStatus := C.BoltStatus_create()
+	defer C.BoltStatus_destroy(cStatus)
+	cConnection := C.BoltConnector_acquire(conn.cInstance, C.BoltAccessMode(cMode), cStatus)
+	if cConnection == nil {
+		state := C.BoltStatus_get_state(cStatus)
+		code := C.BoltStatus_get_error(cStatus)
+		codeText := C.GoString(C.BoltError_get_string(code))
+		context := C.GoString(C.BoltStatus_get_error_context(cStatus))
 
-		return nil, newConnectorError(int(cResult.connection_status), int(cResult.connection_error), codeText, context, "unable to acquire connection from connector")
+		return nil, newConnectorError(int(state), int(code), codeText, context, "unable to acquire connection from connector")
 	}
 
-	return &neo4jConnection{connector: conn, cInstance: cResult.connection, valueSystem: conn.valueSystem}, nil
+	return &neo4jConnection{connector: conn, cInstance: cConnection, valueSystem: conn.valueSystem}, nil
 }
 
 func (conn *neo4jConnector) release(connection *neo4jConnection) error {
@@ -172,7 +176,7 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 
 	if certsBuf != nil {
 		certsBytes := certsBuf.String()
-		C.BoltTrust_set_certs(cTrust, C.CString(certsBytes), C.int(certsBuf.Len()))
+		C.BoltTrust_set_certs(cTrust, C.CString(certsBytes), C.uint64_t(certsBuf.Len()))
 	}
 
 	if config.TLSSkipVerify {

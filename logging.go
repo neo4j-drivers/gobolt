@@ -22,13 +22,16 @@ package gobolt
 /*
 #include "bolt/bolt.h"
 
-extern void go_seabolt_log_error_cb(int state, char* message);
-extern void go_seabolt_log_warning_cb(int state, char* message);
-extern void go_seabolt_log_info_cb(int state, char* message);
-extern void go_seabolt_log_debug_cb(int state, char* message);
+extern void go_seabolt_log_error_cb(void* state, char* message);
+extern void go_seabolt_log_warning_cb(void* state, char* message);
+extern void go_seabolt_log_info_cb(void* state, char* message);
+extern void go_seabolt_log_debug_cb(void* state, char* message);
 */
 import "C"
-import "sync"
+import (
+	"sync"
+	"unsafe"
+)
 
 // Logging is the interface that any provided logging target must satisfy for the connector
 // to use
@@ -45,7 +48,7 @@ type Logging interface {
 }
 
 //export go_seabolt_log_error_cb
-func go_seabolt_log_error_cb(state C.int, message *C.char) {
+func go_seabolt_log_error_cb(state unsafe.Pointer, message *C.char) {
 	logging := lookupLogging(state)
 	if logging != nil && logging.ErrorEnabled() {
 		logging.Errorf(C.GoString(message))
@@ -53,7 +56,7 @@ func go_seabolt_log_error_cb(state C.int, message *C.char) {
 }
 
 //export go_seabolt_log_warning_cb
-func go_seabolt_log_warning_cb(state C.int, message *C.char) {
+func go_seabolt_log_warning_cb(state unsafe.Pointer, message *C.char) {
 	logging := lookupLogging(state)
 	if logging != nil && logging.WarningEnabled() {
 		logging.Warningf(C.GoString(message))
@@ -61,7 +64,7 @@ func go_seabolt_log_warning_cb(state C.int, message *C.char) {
 }
 
 //export go_seabolt_log_info_cb
-func go_seabolt_log_info_cb(state C.int, message *C.char) {
+func go_seabolt_log_info_cb(state unsafe.Pointer, message *C.char) {
 	logging := lookupLogging(state)
 	if logging != nil && logging.InfoEnabled() {
 		logging.Infof(C.GoString(message))
@@ -69,7 +72,7 @@ func go_seabolt_log_info_cb(state C.int, message *C.char) {
 }
 
 //export go_seabolt_log_debug_cb
-func go_seabolt_log_debug_cb(state C.int, message *C.char) {
+func go_seabolt_log_debug_cb(state unsafe.Pointer, message *C.char) {
 	logging := lookupLogging(state)
 	if logging != nil && logging.DebugEnabled() {
 		logging.Debugf(C.GoString(message))
@@ -85,7 +88,7 @@ func registerLogging(key int, logging Logging) *C.struct_BoltLog {
 
 	mapLogging.Store(key, logging)
 
-	boltLog := C.BoltLog_create(C.int(key))
+	boltLog := C.BoltLog_create(unsafe.Pointer(&key))
 	if logging != nil && logging.ErrorEnabled() {
 		C.BoltLog_set_error_func(boltLog, C.log_func(C.go_seabolt_log_error_cb))
 	}
@@ -105,8 +108,8 @@ func registerLogging(key int, logging Logging) *C.struct_BoltLog {
 	return boltLog
 }
 
-func lookupLogging(key C.int) Logging {
-	if logging, ok := mapLogging.Load(int(key)); ok {
+func lookupLogging(key unsafe.Pointer) Logging {
+	if logging, ok := mapLogging.Load(*(*int)(key)); ok {
 		return logging.(Logging)
 	}
 
