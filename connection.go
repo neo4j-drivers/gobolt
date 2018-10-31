@@ -85,7 +85,7 @@ func (connection *neo4jConnection) Server() string {
 }
 
 func (connection *neo4jConnection) Begin(bookmarks []string, txTimeout time.Duration, txMetadata map[string]interface{}) (RequestHandle, error) {
-	var res C.int
+	var res C.int32_t
 
 	res = C.BoltConnection_clear_begin(connection.cInstance)
 	if res != C.BOLT_SUCCESS {
@@ -145,7 +145,7 @@ func (connection *neo4jConnection) Rollback() (RequestHandle, error) {
 }
 
 func (connection *neo4jConnection) Run(cypher string, params map[string]interface{}, bookmarks []string, txTimeout time.Duration, txMetadata map[string]interface{}) (RequestHandle, error) {
-	var res C.int
+	var res C.int32_t
 
 	res = C.BoltConnection_clear_run(connection.cInstance)
 	if res != C.BOLT_SUCCESS {
@@ -153,7 +153,7 @@ func (connection *neo4jConnection) Run(cypher string, params map[string]interfac
 	}
 
 	cypherStr := C.CString(cypher)
-	res = C.BoltConnection_set_run_cypher(connection.cInstance, cypherStr, C.size_t(len(cypher)), C.int32_t(len(params)))
+	res = C.BoltConnection_set_run_cypher(connection.cInstance, cypherStr, C.uint64_t(len(cypher)), C.int32_t(len(params)))
 	C.free(unsafe.Pointer(cypherStr))
 	if res != C.BOLT_SUCCESS {
 		return -1, newError(connection, "unable to set cypher statement")
@@ -161,7 +161,7 @@ func (connection *neo4jConnection) Run(cypher string, params map[string]interfac
 
 	var index C.int32_t
 	for paramName, paramValue := range params {
-		paramNameLen := C.size_t(len(paramName))
+		paramNameLen := C.uint64_t(len(paramName))
 		paramNameStr := C.CString(paramName)
 
 		boltValue := C.BoltConnection_set_run_cypher_parameter(connection.cInstance, index, paramNameStr, paramNameLen)
