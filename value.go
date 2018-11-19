@@ -202,7 +202,12 @@ func (valueSystem *boltValueSystem) valueAsConnector(target *C.struct_BoltValue,
 			handled = true
 			switch v.Kind() {
 			case reflect.Ptr:
-				valueSystem.valueAsConnector(target, reflect.ValueOf(value).Elem().Interface())
+				ptrv := reflect.ValueOf(value)
+				if ptrv.IsNil() {
+					C.BoltValue_format_as_Null(target)
+				} else {
+					valueSystem.valueAsConnector(target, ptrv.Elem().Interface())
+				}
 			case reflect.Slice:
 				valueSystem.listAsValue(target, value)
 			case reflect.Map:
