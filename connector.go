@@ -207,10 +207,16 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 	}
 
 	userAgentStr := C.CString("Go Driver/1.7")
-	routingContextValue := valueSystem.valueToConnector(uri.Query())
+	routingContextValue, err := valueSystem.valueToConnector(uri.Query())
+	if err != nil {
+		return nil, err
+	}
 	hostnameStr, portStr := C.CString(uri.Hostname()), C.CString(uri.Port())
 	address := C.BoltAddress_create(hostnameStr, portStr)
-	authTokenValue := valueSystem.valueToConnector(authToken)
+	authTokenValue, err := valueSystem.valueToConnector(authToken)
+	if err != nil {
+		return nil, err
+	}
 
 	key := startupLibrary()
 
