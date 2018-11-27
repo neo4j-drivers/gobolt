@@ -207,9 +207,9 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 	}
 
 	userAgentStr := C.CString("Go Driver/1.7")
-	routingContextValue, err := valueSystem.valueToConnector(uri.Query())
+	routingContextValue, err := extractRoutingContext(uri, valueSystem)
 	if err != nil {
-		return nil, valueSystem.genericErrorFactory("unable to convert routing context to connector value: %v", err)
+		return nil, valueSystem.genericErrorFactory("unable to extract routing context: %v", err)
 	}
 	hostnameStr, portStr := C.CString(uri.Hostname()), C.CString(uri.Port())
 	address := C.BoltAddress_create(hostnameStr, portStr)
@@ -295,6 +295,31 @@ func createValueSystem(config *Config) *boltValueSystem {
 		databaseErrorFactory:     databaseErrorFactory,
 		genericErrorFactory:      genericErrorFactory,
 	}
+}
+
+func extractRoutingContext(source *url.URL, valueSystem *boltValueSystem) (*C.struct_BoltValue, error) {
+	var err error
+	var values url.Values
+	var result map[string]string
+
+	if values, err = url.ParseQuery(source.RawQuery); err != nil {
+		return nil, valueSystem.genericErrorFactory("unable to parse routing context '%s'", source.RawQuery)
+	}
+
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	result = make(map[string]string, len(values))
+	for key, value := range values {
+		if len(value) > 1 {
+			return nil, valueSystem.genericErrorFactory("duplicate value specified for '%s' as routing context", key)
+		}
+
+		result[key] = value[0]
+	}
+
+	return valueSystem.valueToConnector(result)
 }
 
 func startupLibrary() int {
