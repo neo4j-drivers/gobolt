@@ -305,7 +305,7 @@ func (connection *neo4jConnection) Fields() ([]string, error) {
 		return fieldsAsStr, nil
 	}
 
-	return nil, newGenericError("field names not available")
+	return nil, connection.valueSystem.genericErrorFactory("field names not available")
 }
 
 func (connection *neo4jConnection) Metadata() (map[string]interface{}, error) {
@@ -318,7 +318,7 @@ func (connection *neo4jConnection) Metadata() (map[string]interface{}, error) {
 		return metadataAsGenericMap, nil
 	}
 
-	return nil, newGenericError("metadata is not of expected type")
+	return nil, connection.valueSystem.genericErrorFactory("metadata is not of expected type")
 }
 
 func (connection *neo4jConnection) Data() ([]interface{}, error) {

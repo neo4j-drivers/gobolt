@@ -71,10 +71,10 @@ func (valueSystem *boltValueSystem) valueAsGo(value *C.struct_BoltValue) (interf
 			return handler.Read(signature, listValue)
 		}
 
-		return nil, newGenericError("unsupported struct type received: %#x", signature)
+		return nil, valueSystem.genericErrorFactory("unsupported struct type received: %#x", signature)
 	}
 
-	return nil, newGenericError("unsupported data type")
+	return nil, valueSystem.genericErrorFactory("unsupported data type")
 }
 
 func (valueSystem *boltValueSystem) valueAsBoolean(value *C.struct_BoltValue) bool {
@@ -298,7 +298,7 @@ func (valueSystem *boltValueSystem) bytesAsValue(target *C.struct_BoltValue, val
 func (valueSystem *boltValueSystem) listAsValue(target *C.struct_BoltValue, value interface{}) error {
 	slice := reflect.ValueOf(value)
 	if slice.Kind() != reflect.Slice {
-		return newGenericError("listAsValue invoked with a non-slice type: %v", value)
+		return valueSystem.genericErrorFactory("listAsValue invoked with a non-slice type: %v", value)
 	}
 
 	C.BoltValue_format_as_List(target, C.int32_t(slice.Len()))
@@ -315,7 +315,7 @@ func (valueSystem *boltValueSystem) listAsValue(target *C.struct_BoltValue, valu
 func (valueSystem *boltValueSystem) mapAsValue(target *C.struct_BoltValue, value interface{}) error {
 	dict := reflect.ValueOf(value)
 	if dict.Kind() != reflect.Map {
-		return newGenericError("mapAsValue invoked with a non-map type: %v", value)
+		return valueSystem.genericErrorFactory("mapAsValue invoked with a non-map type: %v", value)
 	}
 
 	C.BoltValue_format_as_Dictionary(target, C.int32_t(dict.Len()))
