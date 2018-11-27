@@ -93,7 +93,10 @@ func (connection *neo4jConnection) Begin(bookmarks []string, txTimeout time.Dura
 	}
 
 	if len(bookmarks) > 0 {
-		bookmarksValue := connection.valueSystem.valueToConnector(bookmarks)
+		bookmarksValue, err := connection.valueSystem.valueToConnector(bookmarks)
+		if err != nil {
+			return -1, connection.valueSystem.genericErrorFactory("unable to convert bookmarks to connector value for begin message: %v", err)
+		}
 		res := C.BoltConnection_set_begin_bookmarks(connection.cInstance, bookmarksValue)
 		C.BoltValue_destroy(bookmarksValue)
 		if res != C.BOLT_SUCCESS {
@@ -110,7 +113,10 @@ func (connection *neo4jConnection) Begin(bookmarks []string, txTimeout time.Dura
 	}
 
 	if len(txMetadata) > 0 {
-		metadataValue := connection.valueSystem.valueToConnector(txMetadata)
+		metadataValue, err := connection.valueSystem.valueToConnector(txMetadata)
+		if err != nil {
+			return -1, connection.valueSystem.genericErrorFactory("unable to convert tx metadata to connector value for begin message: %v", err)
+		}
 		res := C.BoltConnection_set_begin_tx_metadata(connection.cInstance, metadataValue)
 		C.BoltValue_destroy(metadataValue)
 		if res != C.BOLT_SUCCESS {
@@ -170,13 +176,18 @@ func (connection *neo4jConnection) Run(cypher string, params map[string]interfac
 			return -1, newError(connection, "unable to retrieve reference to cypher statement parameter value")
 		}
 
-		connection.valueSystem.valueAsConnector(boltValue, paramValue)
+		if err := connection.valueSystem.valueAsConnector(boltValue, paramValue); err != nil {
+			return -1, connection.valueSystem.genericErrorFactory("unable to convert parameter %q to connector value for run message: %v", paramName, err)
+		}
 
 		index++
 	}
 
 	if len(bookmarks) > 0 {
-		bookmarksValue := connection.valueSystem.valueToConnector(bookmarks)
+		bookmarksValue, err := connection.valueSystem.valueToConnector(bookmarks)
+		if err != nil {
+			return -1, connection.valueSystem.genericErrorFactory("unable to convert bookmarks to connector value for run message: %v", err)
+		}
 		res := C.BoltConnection_set_run_bookmarks(connection.cInstance, bookmarksValue)
 		C.BoltValue_destroy(bookmarksValue)
 		if res != C.BOLT_SUCCESS {
@@ -193,7 +204,10 @@ func (connection *neo4jConnection) Run(cypher string, params map[string]interfac
 	}
 
 	if len(txMetadata) > 0 {
-		metadataValue := connection.valueSystem.valueToConnector(txMetadata)
+		metadataValue, err := connection.valueSystem.valueToConnector(txMetadata)
+		if err != nil {
+			return -1, connection.valueSystem.genericErrorFactory("unable to convert tx metadata to connector value for run message: %v", err)
+		}
 		res := C.BoltConnection_set_run_tx_metadata(connection.cInstance, metadataValue)
 		C.BoltValue_destroy(metadataValue)
 		if res != C.BOLT_SUCCESS {
