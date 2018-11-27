@@ -262,7 +262,7 @@ func (valueSystem *boltValueSystem) valueAsConnector(target *C.struct_BoltValue,
 	}
 
 	// nothing worked
-	return newGenericError("unsupported value for conversion: %v", value)
+	return valueSystem.genericErrorFactory("unsupported value for conversion: %v", value)
 }
 
 func (valueSystem *boltValueSystem) boolAsValue(target *C.struct_BoltValue, value bool) {

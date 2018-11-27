@@ -209,13 +209,13 @@ func NewConnector(uri *url.URL, authToken map[string]interface{}, config *Config
 	userAgentStr := C.CString("Go Driver/1.7")
 	routingContextValue, err := valueSystem.valueToConnector(uri.Query())
 	if err != nil {
-		return nil, err
+		return nil, valueSystem.genericErrorFactory("unable to convert routing context to connector value: %v", err)
 	}
 	hostnameStr, portStr := C.CString(uri.Hostname()), C.CString(uri.Port())
 	address := C.BoltAddress_create(hostnameStr, portStr)
 	authTokenValue, err := valueSystem.valueToConnector(authToken)
 	if err != nil {
-		return nil, err
+		return nil, valueSystem.genericErrorFactory("unable to convert authentication token to connector value: %v", err)
 	}
 
 	key := startupLibrary()
