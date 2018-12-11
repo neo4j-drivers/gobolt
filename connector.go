@@ -64,9 +64,9 @@ const (
 	// FetchTypeRecord tells that fetched data is record
 	FetchTypeRecord FetchType = 1
 	// FetchTypeMetadata tells that fetched data is metadata
-	FetchTypeMetadata = 0
+	FetchTypeMetadata FetchType = 0
 	// FetchTypeError tells that fetch was not successful
-	FetchTypeError = -1
+	FetchTypeError FetchType = -1
 )
 
 var initCounter int32
