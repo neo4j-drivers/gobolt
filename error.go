@@ -145,7 +145,7 @@ func (failure *defaultGenericError) Error() string {
 	return failure.message
 }
 
-func newError(connection *neo4jConnection, description string) error {
+func newError(connection *seaboltConnection, description string) error {
 	cStatus := C.BoltConnection_status(connection.cInstance)
 	errorCode := C.BoltStatus_get_error(cStatus)
 

@@ -117,29 +117,7 @@ func (conn *neo4jConnector) Close() error {
 }
 
 func (conn *neo4jConnector) Acquire(mode AccessMode) (Connection, error) {
-	var cMode uint32 = C.BOLT_ACCESS_MODE_WRITE
-	if mode == AccessModeRead {
-		cMode = C.BOLT_ACCESS_MODE_READ
-	}
-
-	cStatus := C.BoltStatus_create()
-	defer C.BoltStatus_destroy(cStatus)
-	cConnection := C.BoltConnector_acquire(conn.cInstance, C.BoltAccessMode(cMode), cStatus)
-	if cConnection == nil {
-		state := C.BoltStatus_get_state(cStatus)
-		code := C.BoltStatus_get_error(cStatus)
-		codeText := C.GoString(C.BoltError_get_string(code))
-		context := C.GoString(C.BoltStatus_get_error_context(cStatus))
-
-		return nil, newConnectorError(int(state), int(code), codeText, context, "unable to acquire connection from connector")
-	}
-
-	return &neo4jConnection{connector: conn, cInstance: cConnection, valueSystem: conn.valueSystem}, nil
-}
-
-func (conn *neo4jConnector) release(connection *neo4jConnection) error {
-	C.BoltConnector_release(conn.cInstance, connection.cInstance)
-	return nil
+	return newSeaboltConnection(conn, mode)
 }
 
 // GetAllocationStats returns statistics about seabolt (C) allocations
