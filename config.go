@@ -19,11 +19,19 @@
 
 package gobolt
 
+/*
+#include <stdlib.h>
+
+#include "bolt/bolt.h"
+*/
+import "C"
 import (
 	"bytes"
 	"crypto/x509"
 	"encoding/pem"
+	"net/url"
 	"time"
+	"unsafe"
 )
 
 // Config holds the available configurations options applicable to the connector
@@ -57,4 +65,131 @@ func pemEncodeCerts(certs []*x509.Certificate) (*bytes.Buffer, error) {
 		}
 	}
 	return buf, nil
+}
+
+func createConfig(key int, uri *url.URL, config *Config, valueSystem *boltValueSystem) (*C.struct_BoltConfig, error) {
+	var err error
+	var cTrust *C.struct_BoltTrust
+	var cSocketOpts *C.struct_BoltSocketOptions
+	var cRoutingContext *C.struct_BoltValue
+	var cUserAgent *C.char
+	var cConfig *C.struct_BoltConfig
+
+	if cTrust, err = createTrust(config); err != nil {
+		return nil, valueSystem.genericErrorFactory("unable to create trust settings: %v", err)
+	}
+	defer C.BoltTrust_destroy(cTrust)
+
+	if cRoutingContext, err = createRoutingContext(uri, valueSystem); err != nil {
+		return nil, valueSystem.genericErrorFactory("unable to extract routing context: %v", err)
+	}
+	defer C.BoltValue_destroy(cRoutingContext)
+
+	cSocketOpts = createSocketOptions(config)
+	defer C.BoltSocketOptions_destroy(cSocketOpts)
+
+	cUserAgent = C.CString("Go Driver/1.7")
+	defer C.free(unsafe.Pointer(cUserAgent))
+
+	var cLogger = registerLogging(key, config.Log)
+	defer C.BoltLog_destroy(cLogger)
+
+	var cResolver = registerResolver(key, config.AddressResolver)
+	defer C.BoltAddressResolver_destroy(cResolver)
+
+	cConfig = C.BoltConfig_create()
+	C.BoltConfig_set_mode(cConfig, mode(uri))
+	C.BoltConfig_set_transport(cConfig, transport(config))
+	C.BoltConfig_set_trust(cConfig, cTrust)
+	C.BoltConfig_set_user_agent(cConfig, cUserAgent)
+	C.BoltConfig_set_routing_context(cConfig, cRoutingContext)
+	C.BoltConfig_set_address_resolver(cConfig, cResolver)
+	C.BoltConfig_set_log(cConfig, cLogger)
+	C.BoltConfig_set_max_pool_size(cConfig, C.int(config.MaxPoolSize))
+	C.BoltConfig_set_max_connection_life_time(cConfig, C.int(config.MaxConnLifetime/time.Millisecond))
+	C.BoltConfig_set_max_connection_acquisition_time(cConfig, C.int(config.ConnAcquisitionTimeout/time.Millisecond))
+	C.BoltConfig_set_socket_options(cConfig, cSocketOpts)
+	return cConfig, nil
+}
+
+func mode(uri *url.URL) C.BoltMode {
+	var mode C.BoltMode = C.BOLT_MODE_DIRECT
+	if uri.Scheme == "bolt+routing" {
+		mode = C.BOLT_MODE_ROUTING
+	}
+	return mode
+}
+
+func transport(config *Config) C.BoltTransport {
+	var transport C.BoltTransport = C.BOLT_TRANSPORT_PLAINTEXT
+	if config.Encryption {
+		transport = C.BOLT_TRANSPORT_ENCRYPTED
+	}
+	return transport
+}
+
+func createSocketOptions(config *Config) *C.struct_BoltSocketOptions {
+	var cSocketOpts = C.BoltSocketOptions_create()
+
+	C.BoltSocketOptions_set_connect_timeout(cSocketOpts, C.int(config.SockConnectTimeout/time.Millisecond))
+	C.BoltSocketOptions_set_keep_alive(cSocketOpts, 1)
+	if !config.SockKeepalive {
+		C.BoltSocketOptions_set_keep_alive(cSocketOpts, 0)
+	}
+
+	return cSocketOpts
+}
+
+func createTrust(config *Config) (*C.struct_BoltTrust, error) {
+	var cTrust = C.BoltTrust_create()
+	C.BoltTrust_set_certs(cTrust, nil, 0)
+	C.BoltTrust_set_skip_verify(cTrust, 0)
+	C.BoltTrust_set_skip_verify_hostname(cTrust, 0)
+
+	certsBuf, err := pemEncodeCerts(config.TLSCertificates)
+	if err != nil {
+		C.BoltTrust_destroy(cTrust)
+
+		return nil, err
+	}
+
+	if certsBuf != nil {
+		certsBytes := certsBuf.String()
+		C.BoltTrust_set_certs(cTrust, C.CString(certsBytes), C.uint64_t(certsBuf.Len()))
+	}
+
+	if config.TLSSkipVerify {
+		C.BoltTrust_set_skip_verify(cTrust, 1)
+	}
+
+	if config.TLSSkipVerifyHostname {
+		C.BoltTrust_set_skip_verify_hostname(cTrust, 1)
+	}
+
+	return cTrust, nil
+}
+
+func createRoutingContext(source *url.URL, valueSystem *boltValueSystem) (*C.struct_BoltValue, error) {
+	var err error
+	var values url.Values
+	var result map[string]string
+
+	if values, err = url.ParseQuery(source.RawQuery); err != nil {
+		return nil, valueSystem.genericErrorFactory("unable to parse routing context '%s'", source.RawQuery)
+	}
+
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	result = make(map[string]string, len(values))
+	for key, value := range values {
+		if len(value) > 1 {
+			return nil, valueSystem.genericErrorFactory("duplicate value specified for '%s' as routing context", key)
+		}
+
+		result[key] = value[0]
+	}
+
+	return valueSystem.valueToConnector(result)
 }
