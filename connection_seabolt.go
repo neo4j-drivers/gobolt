@@ -37,7 +37,7 @@ type seaboltConnection struct {
 	valueSystem *boltValueSystem
 }
 
-func newSeaboltConnection(connector *seaboltConnector, mode AccessMode) (*seaboltConnection, error) {
+var newSeaboltConnection = func(connector *seaboltConnector, mode AccessMode) (*seaboltConnection, error) {
 	var cMode uint32 = C.BOLT_ACCESS_MODE_WRITE
 	if mode == AccessModeRead {
 		cMode = C.BOLT_ACCESS_MODE_READ

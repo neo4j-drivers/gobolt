@@ -33,7 +33,7 @@ type workerConnection struct {
 	active    int32
 }
 
-func newWorkerConnection(connector *workerConnector, mode AccessMode) (*workerConnection, error) {
+var newWorkerConnection = func(connector *workerConnector, mode AccessMode) (*workerConnection, error) {
 	var err error
 	var startTime time.Time
 	var delegate *seaboltConnection
@@ -60,8 +60,8 @@ func newWorkerConnection(connector *workerConnector, mode AccessMode) (*workerCo
 		}
 
 		if err != nil {
-			if isPoolFullError(err) {
-				if connection.waitClosed(connector.config.ConnAcquisitionTimeout - time.Since(startTime)) {
+			if isPoolFullError(err) && connector.config.ConnAcquisitionTimeout > 0 {
+				if waitClosed(connection, connector.config.ConnAcquisitionTimeout-time.Since(startTime)) {
 					continue
 				} else {
 					return nil, newConnectionAcquisitionTimedOutError(connector.delegate.valueSystem)
@@ -77,7 +77,7 @@ func newWorkerConnection(connector *workerConnector, mode AccessMode) (*workerCo
 	return connection, nil
 }
 
-func (w *workerConnection) waitClosed(timeout time.Duration) bool {
+var waitClosed = func(w *workerConnection, timeout time.Duration) bool {
 	if w.connector != nil {
 		select {
 		case <-w.connector.closeSignal:
@@ -89,7 +89,7 @@ func (w *workerConnection) waitClosed(timeout time.Duration) bool {
 	return false
 }
 
-func (w *workerConnection) signalClosed() {
+var signalClosed = func(w *workerConnection) {
 	if w.connector != nil {
 		select {
 		case w.connector.closeSignal <- signal{}:
@@ -349,7 +349,7 @@ func (w *workerConnection) Close() error {
 		err = otherErr
 	}
 
-	w.signalClosed()
+	signalClosed(w)
 
 	return err
 }

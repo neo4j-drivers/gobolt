@@ -50,6 +50,202 @@ func Test_WorkerConnection(t *testing.T) {
 		return conn, mocked, cleanup
 	}
 
+	t.Run("newWorkerConnection", func(t *testing.T) {
+		var valueSystem = createValueSystem(&Config{})
+		var someOtherFailure = fmt.Errorf("some other failure")
+		var poolFullError = newPoolFullError(valueSystem)
+		var connectionAcquisitionTimedOutError = newConnectionAcquisitionTimedOutError(valueSystem)
+
+		t.Run("shouldInvokeNewSeaboltConnection", func(t *testing.T) {
+			var cases = []struct {
+				name    string
+				timeout time.Duration
+			}{
+				{"AcquisitionTimeout=0", 0},
+				{"AcquisitionTimeout=5s", 5 * time.Second},
+			}
+
+			for _, testCase := range cases {
+				t.Run(testCase.name, func(t *testing.T) {
+					var originalNewSeaboltConnection = newSeaboltConnection
+					defer func() {
+						newSeaboltConnection = originalNewSeaboltConnection
+					}()
+
+					var newSeaboltConnectionCount = 0
+					newSeaboltConnection = func(connector *seaboltConnector, mode AccessMode) (*seaboltConnection, error) {
+						newSeaboltConnectionCount++
+						return &seaboltConnection{}, nil
+					}
+
+					var connector = &workerConnector{
+						config: Config{ConnAcquisitionTimeout: testCase.timeout},
+						pool:   newWorkerPool(1, 1, 1*time.Minute),
+					}
+					defer connector.pool.close()
+
+					connection, err := newWorkerConnection(connector, AccessModeRead)
+
+					assert.NoError(t, err)
+					assert.NotNil(t, connection)
+					assert.Equal(t, 1, newSeaboltConnectionCount)
+				})
+			}
+		})
+
+		t.Run("shouldReturnErrorFromNewSeaboltConnection", func(t *testing.T) {
+			var originalNewSeaboltConnection = newSeaboltConnection
+			defer func() {
+				newSeaboltConnection = originalNewSeaboltConnection
+			}()
+
+			var newSeaboltConnectionCount = 0
+			newSeaboltConnection = func(connector *seaboltConnector, mode AccessMode) (*seaboltConnection, error) {
+				newSeaboltConnectionCount++
+				return nil, someOtherFailure
+			}
+
+			var connector = &workerConnector{
+				config: Config{ConnAcquisitionTimeout: 0},
+				pool:   newWorkerPool(1, 1, 1*time.Minute),
+			}
+			defer connector.pool.close()
+
+			connection, err := newWorkerConnection(connector, AccessModeRead)
+
+			assert.EqualError(t, err, "some other failure")
+			assert.Nil(t, connection)
+			assert.Equal(t, 1, newSeaboltConnectionCount)
+		})
+
+		t.Run("shouldReturnPoolFullErrorWhenAcquisitionTimeoutIsZero", func(t *testing.T) {
+			var originalNewSeaboltConnection = newSeaboltConnection
+			defer func() {
+				newSeaboltConnection = originalNewSeaboltConnection
+			}()
+
+			var newSeaboltConnectionCount = 0
+			newSeaboltConnection = func(connector *seaboltConnector, mode AccessMode) (*seaboltConnection, error) {
+				newSeaboltConnectionCount++
+				return nil, poolFullError
+			}
+
+			var connector = &workerConnector{
+				config: Config{ConnAcquisitionTimeout: 0},
+				pool:   newWorkerPool(1, 1, 1*time.Minute),
+			}
+			defer connector.pool.close()
+
+			connection, err := newWorkerConnection(connector, AccessModeRead)
+
+			assert.EqualError(t, err, poolFullError.Error())
+			assert.Nil(t, connection)
+			assert.Equal(t, 1, newSeaboltConnectionCount)
+		})
+
+		t.Run("shouldInvokeWaitClosedWhenPoolIsFullAndSucceedWhenWaitSucceeds", func(t *testing.T) {
+			var originalNewSeaboltConnection = newSeaboltConnection
+			var originalWaitClosed = waitClosed
+			defer func() {
+				newSeaboltConnection = originalNewSeaboltConnection
+				waitClosed = originalWaitClosed
+			}()
+
+			var newSeaboltConnectionCount = 0
+			newSeaboltConnection = func(connector *seaboltConnector, mode AccessMode) (*seaboltConnection, error) {
+				newSeaboltConnectionCount++
+				if newSeaboltConnectionCount > 1 {
+					return &seaboltConnection{}, nil
+				}
+				return nil, poolFullError
+			}
+
+			var waitClosedCount = 0
+			waitClosed = func(w *workerConnection, timeout time.Duration) bool {
+				waitClosedCount++
+				return true
+			}
+
+			var connector = &workerConnector{
+				config: Config{ConnAcquisitionTimeout: 5 * time.Second},
+				pool:   newWorkerPool(1, 1, 1*time.Minute),
+			}
+			defer connector.pool.close()
+
+			connection, err := newWorkerConnection(connector, AccessModeRead)
+
+			assert.NoError(t, err)
+			assert.NotNil(t, connection)
+			assert.Equal(t, 1, waitClosedCount)
+			assert.Equal(t, 2, newSeaboltConnectionCount)
+		})
+
+		t.Run("shouldInvokeWaitClosedWhenPoolIsFullAndFailWhenWaitFails", func(t *testing.T) {
+			var originalNewSeaboltConnection = newSeaboltConnection
+			var originalWaitClosed = waitClosed
+			defer func() {
+				newSeaboltConnection = originalNewSeaboltConnection
+				waitClosed = originalWaitClosed
+			}()
+
+			var newSeaboltConnectionCount = 0
+			newSeaboltConnection = func(connector *seaboltConnector, mode AccessMode) (*seaboltConnection, error) {
+				newSeaboltConnectionCount++
+				return nil, poolFullError
+			}
+
+			var waitClosedCount = 0
+			waitClosed = func(w *workerConnection, timeout time.Duration) bool {
+				waitClosedCount++
+				return false
+			}
+
+			var connector = &workerConnector{
+				config: Config{ConnAcquisitionTimeout: 5 * time.Second},
+				pool:   newWorkerPool(1, 1, 1*time.Minute),
+				delegate: &seaboltConnector{
+					valueSystem: valueSystem,
+				},
+			}
+			defer connector.pool.close()
+
+			connection, err := newWorkerConnection(connector, AccessModeRead)
+
+			assert.EqualError(t, err, connectionAcquisitionTimedOutError.Error())
+			assert.Nil(t, connection)
+			assert.Equal(t, 1, waitClosedCount)
+			assert.Equal(t, 1, newSeaboltConnectionCount)
+		})
+	})
+
+	t.Run("shouldInvokeSignalClosedOnClose", func(t *testing.T) {
+		var originalSignalClosed = signalClosed
+		defer func() {
+			signalClosed = originalSignalClosed
+		}()
+
+		var signalClosedCount = 0
+		signalClosed = func(w *workerConnection) {
+			signalClosedCount++
+		}
+
+		conn, delegate, cleanup := newMockedConnection()
+		defer cleanup()
+
+		delegate.On("Close").Return(nil)
+
+		assert.NoError(t, conn.Close())
+		assert.Equal(t, 1, signalClosedCount)
+	})
+
+	t.Run("shouldSurfacePoolFullErrorWhenAcquisitionTimeoutIsZero", func(t *testing.T) {
+
+	})
+
+	t.Run("shouldInterceptPoolFullErrorWhenAcquisitionTimeoutIsNotZero", func(t *testing.T) {
+
+	})
+
 	t.Run("shouldInvokeDelegate", func(t *testing.T) {
 		failure := fmt.Errorf("some error")
 		handle := RequestHandle(500)
