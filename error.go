@@ -384,6 +384,11 @@ func isPoolFullError(err error) bool {
 }
 
 func newConnectionAcquisitionTimedOutError(valueSystem *boltValueSystem) error {
+	return valueSystem.connectorErrorFactory(C.BOLT_CONNECTION_STATE_DISCONNECTED, C.BOLT_POOL_ACQUISITION_TIMED_OUT, C.GoString(C.BoltError_get_string(C.BOLT_POOL_ACQUISITION_TIMED_OUT)), "", "")
+
+}
+
+func newPoolFullError(valueSystem *boltValueSystem) error {
 	return valueSystem.connectorErrorFactory(C.BOLT_CONNECTION_STATE_DISCONNECTED, C.BOLT_POOL_FULL, C.GoString(C.BoltError_get_string(C.BOLT_POOL_FULL)), "", "")
 
 }
