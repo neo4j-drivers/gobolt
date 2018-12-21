@@ -1,5 +1,3 @@
-// +build !seabolt_static
-
 /*
  * Copyright (c) 2002-2018 "Neo4j,"
  * Neo4j Sweden AB [http://neo4j.com]
@@ -21,5 +19,18 @@
 
 package gobolt
 
-// #cgo pkg-config: seabolt17
+/*
+#include <stdlib.h>
+
+#include "bolt/bolt.h"
+*/
 import "C"
+
+// GetAllocationStats returns statistics about seabolt (C) allocations
+func GetAllocationStats() (int64, int64, int64) {
+	current := C.BoltStat_memory_allocation_current()
+	peak := C.BoltStat_memory_allocation_peak()
+	events := C.BoltStat_memory_allocation_events()
+
+	return int64(current), int64(peak), int64(events)
+}

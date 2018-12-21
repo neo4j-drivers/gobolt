@@ -34,8 +34,7 @@ func Test_WorkerConnection(t *testing.T) {
 		connection := &workerConnection{
 			pool:     pool,
 			delegate: delegate,
-			recving:  0,
-			sending:  0,
+			active:   0,
 		}
 
 		return connection, delegate, func() {
@@ -46,8 +45,7 @@ func Test_WorkerConnection(t *testing.T) {
 	newMockedConnectionInUse := func() (*workerConnection, *mockConnection, func()) {
 		conn, mocked, cleanup := newMockedConnection()
 
-		conn.recving = 1
-		conn.sending = 1
+		conn.active = 1
 
 		return conn, mocked, cleanup
 	}
@@ -449,7 +447,7 @@ func Test_WorkerConnection(t *testing.T) {
 
 	})
 
-	t.Run("queueRecvJob", func(t *testing.T) {
+	t.Run("queueJob", func(t *testing.T) {
 		t.Run("shouldSetReceivingToOneWhenExecuting", func(t *testing.T) {
 			var startEvent = make(chan bool, 1)
 			var waitEvent = make(chan bool, 1)
@@ -463,20 +461,20 @@ func Test_WorkerConnection(t *testing.T) {
 			defer close(waitEvent)
 			defer close(startEvent)
 
-			go conn.queueRecvJob(blockingJob)
+			go conn.queueJob(blockingJob)
 
 			<-startEvent
 
-			assert.Equal(t, int32(1), conn.recving)
+			assert.Equal(t, int32(1), conn.active)
 		})
 
 		t.Run("shouldSetReceivingToZeroWhenExecutionIsComplete", func(t *testing.T) {
 			conn, _, cleanup := newMockedConnection()
 			defer cleanup()
 
-			conn.queueRecvJob(func() {})
+			conn.queueJob(func() {})
 
-			assert.Equal(t, int32(0), conn.recving)
+			assert.Equal(t, int32(0), conn.active)
 		})
 
 		t.Run("shouldCheckForConcurrentAccess", func(t *testing.T) {
@@ -492,115 +490,13 @@ func Test_WorkerConnection(t *testing.T) {
 			defer close(waitEvent)
 			defer close(startEvent)
 
-			go conn.queueRecvJob(blockingJob)
+			go conn.queueJob(blockingJob)
 
 			<-startEvent
 
-			err := conn.queueRecvJob(blockingJob)
+			err := conn.queueJob(blockingJob)
 
 			assert.EqualError(t, err, "a connection is not thread-safe and thus should not be used concurrently")
 		})
-
-		t.Run("shouldReturnWorkerError", func(t *testing.T) {
-			var startEvent = make(chan bool, 1)
-			var waitEvent = make(chan bool, 1)
-			var blockingJob = func() {
-				startEvent <- true
-				<-waitEvent
-			}
-
-			conn, _, cleanup := newMockedConnection()
-			defer cleanup()
-			defer close(waitEvent)
-			defer close(startEvent)
-
-			go conn.pool.submit(func(stopper <-chan signal) {
-				blockingJob()
-			})
-
-			<-startEvent
-
-			err := conn.queueRecvJob(blockingJob)
-
-			assert.EqualError(t, err, "worker pool reached its maximum capacity")
-		})
 	})
-
-	t.Run("queueSendJob", func(t *testing.T) {
-		t.Run("shouldSetReceivingToOneWhenExecuting", func(t *testing.T) {
-			var startEvent = make(chan bool, 1)
-			var waitEvent = make(chan bool, 1)
-			var blockingJob = func() {
-				startEvent <- true
-				<-waitEvent
-			}
-
-			conn, _, cleanup := newMockedConnection()
-			defer cleanup()
-			defer close(waitEvent)
-			defer close(startEvent)
-
-			go conn.queueSendJob(blockingJob)
-
-			<-startEvent
-
-			assert.Equal(t, int32(1), conn.sending)
-		})
-
-		t.Run("shouldSetReceivingToZeroWhenExecutionIsComplete", func(t *testing.T) {
-			conn, _, cleanup := newMockedConnection()
-			defer cleanup()
-
-			conn.queueSendJob(func() {})
-
-			assert.Equal(t, int32(0), conn.recving)
-		})
-
-		t.Run("shouldCheckForConcurrentAccess", func(t *testing.T) {
-			var startEvent = make(chan bool, 1)
-			var waitEvent = make(chan bool, 1)
-			var blockingJob = func() {
-				startEvent <- true
-				<-waitEvent
-			}
-
-			conn, _, cleanup := newMockedConnection()
-			defer cleanup()
-			defer close(waitEvent)
-			defer close(startEvent)
-
-			go conn.queueSendJob(blockingJob)
-
-			<-startEvent
-
-			err := conn.queueSendJob(blockingJob)
-
-			assert.EqualError(t, err, "a connection is not thread-safe and thus should not be used concurrently")
-		})
-
-		t.Run("shouldReturnWorkerError", func(t *testing.T) {
-			var startEvent = make(chan bool, 1)
-			var waitEvent = make(chan bool, 1)
-			var blockingJob = func() {
-				startEvent <- true
-				<-waitEvent
-			}
-
-			conn, _, cleanup := newMockedConnection()
-			defer cleanup()
-			defer close(waitEvent)
-			defer close(startEvent)
-
-			go conn.pool.submit(func(stopper <-chan signal) {
-				blockingJob()
-			})
-
-			<-startEvent
-
-			err := conn.queueSendJob(blockingJob)
-
-			assert.EqualError(t, err, "worker pool reached its maximum capacity")
-		})
-	})
-
 }

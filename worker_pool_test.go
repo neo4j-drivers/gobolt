@@ -33,8 +33,8 @@ func Test_WorkerPool(t *testing.T) {
 			pool := newWorkerPool(2, 10, 1*time.Minute)
 			defer pool.close()
 
-			assert.Equal(t, int32(2), pool.minWorkers)
-			assert.Equal(t, int32(10), pool.maxWorkers)
+			assert.Equal(t, 2, pool.minWorkers)
+			assert.Equal(t, 10, pool.maxWorkers)
 			assert.Equal(t, 1*time.Minute, pool.keepAlive)
 		})
 
@@ -60,7 +60,8 @@ func Test_WorkerPool(t *testing.T) {
 			pool := newWorkerPool(20, 50, 1*time.Minute)
 			defer pool.close()
 
-			assert.Equal(t, int32(20), pool.workers)
+			assert.Equal(t, int32(20), pool.workerCount)
+			assert.NotEmpty(t, pool.workers)
 		})
 	})
 
@@ -78,11 +79,13 @@ func Test_WorkerPool(t *testing.T) {
 		t.Run("shouldWaitForWorkersOnClose", func(t *testing.T) {
 			pool := newWorkerPool(20, 40, 1*time.Minute)
 
-			assert.Equal(t, int32(20), pool.workers)
+			assert.Equal(t, int32(20), pool.workerCount)
+			assert.NotEmpty(t, pool.workers)
 
 			pool.close()
 
-			assert.Equal(t, int32(0), pool.workers)
+			assert.Equal(t, int32(0), pool.workerCount)
+			assert.Empty(t, pool.workers)
 		})
 	})
 
@@ -91,11 +94,13 @@ func Test_WorkerPool(t *testing.T) {
 			pool := newWorkerPool(4, 8, 3*time.Second)
 			defer pool.close()
 
-			assert.Equal(t, int32(4), pool.workers)
+			assert.Equal(t, int32(4), pool.workerCount)
+			assert.NotEmpty(t, pool.workers)
 
 			<-time.After(5 * time.Second)
 
-			assert.Equal(t, int32(0), pool.workers)
+			assert.Equal(t, int32(0), pool.workerCount)
+			assert.Empty(t, pool.workers)
 		})
 	})
 
@@ -134,21 +139,6 @@ func Test_WorkerPool(t *testing.T) {
 			<-workSignal
 
 			assert.Equal(t, int32(1), workExecutions)
-		})
-
-		t.Run("shouldFailWhenAtPeakCapacity", func(t *testing.T) {
-			var workSignal = make(chan bool, 1)
-			workFunc := func(stopper <-chan signal) {
-				<-workSignal
-			}
-
-			pool := newWorkerPool(1, 1, 5*time.Minute)
-			defer pool.close()
-
-			assert.NoError(t, pool.submit(workFunc))
-			assert.EqualError(t, pool.submit(workFunc), "worker pool reached its maximum capacity")
-
-			close(workSignal)
 		})
 
 		t.Run("shouldFailWhenClosed", func(t *testing.T) {

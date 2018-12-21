@@ -233,9 +233,8 @@ func (valueSystem *boltValueSystem) valueAsConnector(target *C.struct_BoltValue,
 		ptr := reflect.ValueOf(value)
 		if ptr.IsNil() {
 			return valueSystem.valueAsConnector(target, nil)
-		} else {
-			return valueSystem.valueAsConnector(target, ptr.Elem().Interface())
 		}
+		return valueSystem.valueAsConnector(target, ptr.Elem().Interface())
 	case reflect.Slice:
 		return valueSystem.listAsValue(target, value)
 	case reflect.Map:

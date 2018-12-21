@@ -33,16 +33,17 @@ type workItem func(stopper <-chan signal)
 type worker func(pool *workerPool)
 
 type workerPool struct {
-	minWorkers   int32
-	maxWorkers   int32
+	minWorkers   int
+	maxWorkers   int
 	keepAlive    time.Duration
-	workers      int32
+	workerCount  int32
+	workers      chan int
 	workQueue    chan workItem
 	stopper      chan signal
 	stoppedEvent sync.WaitGroup
 }
 
-func newWorkerPool(minWorkers, maxWorkers int32, keepAlive time.Duration) *workerPool {
+func newWorkerPool(minWorkers, maxWorkers int, keepAlive time.Duration) *workerPool {
 	if minWorkers < 0 {
 		panic(fmt.Sprintf("%v is an invalid value for minWorkers", minWorkers))
 	}
@@ -59,13 +60,15 @@ func newWorkerPool(minWorkers, maxWorkers int32, keepAlive time.Duration) *worke
 		minWorkers:   minWorkers,
 		maxWorkers:   maxWorkers,
 		keepAlive:    keepAlive,
-		workers:      0,
+		workerCount:  0,
+		workers:      make(chan int, maxWorkers),
 		workQueue:    make(chan workItem),
 		stopper:      make(chan signal),
 		stoppedEvent: sync.WaitGroup{},
 	}
 
-	for i := int32(0); i < minWorkers; i++ {
+	for i := 0; i < minWorkers; i++ {
+		poolInstance.workers <- 1
 		poolInstance.launchWorker()
 	}
 
@@ -77,10 +80,13 @@ func (pool *workerPool) launchWorker() {
 
 	var started = make(chan int, 1)
 	go func(pool *workerPool) {
-		defer atomic.AddInt32(&pool.workers, -1)
-		defer pool.stoppedEvent.Done()
+		atomic.AddInt32(&pool.workerCount, 1)
+		defer func() {
+			<-pool.workers
+			atomic.AddInt32(&pool.workerCount, -1)
+			pool.stoppedEvent.Done()
+		}()
 
-		atomic.AddInt32(&pool.workers, 1)
 		started <- 1
 
 		workerEntryPoint(pool)
@@ -107,14 +113,16 @@ func (pool *workerPool) submit(work workItem) error {
 		select {
 		case pool.workQueue <- work:
 			return nil
+		default:
+		}
+
+		select {
+		case pool.workQueue <- work:
+			return nil
 		case <-pool.stopper:
 			return newGenericError("unable to submit job to a closed worker pool")
-		default:
-			if atomic.LoadInt32(&pool.workers) < pool.maxWorkers {
-				pool.launchWorker()
-			} else {
-				return newGenericError("worker pool reached its maximum capacity")
-			}
+		case pool.workers <- 1:
+			pool.launchWorker()
 		}
 	}
 }

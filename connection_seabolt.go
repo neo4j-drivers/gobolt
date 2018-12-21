@@ -32,12 +32,12 @@ import (
 )
 
 type seaboltConnection struct {
-	connector   *neo4jConnector
+	connector   *seaboltConnector
 	cInstance   *C.struct_BoltConnection
 	valueSystem *boltValueSystem
 }
 
-func newSeaboltConnection(connector *neo4jConnector, mode AccessMode) (Connection, error) {
+func newSeaboltConnection(connector *seaboltConnector, mode AccessMode) (*seaboltConnection, error) {
 	var cMode uint32 = C.BOLT_ACCESS_MODE_WRITE
 	if mode == AccessModeRead {
 		cMode = C.BOLT_ACCESS_MODE_READ

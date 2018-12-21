@@ -27,37 +27,80 @@ import (
 type job func()
 
 type workerConnection struct {
-	pool     *workerPool
-	delegate Connection
-	sending  int32
-	recving  int32
+	connector *workerConnector
+	pool      *workerPool
+	delegate  Connection
+	active    int32
 }
 
-func (w *workerConnection) queueSendJob(item job) error {
-	if atomic.CompareAndSwapInt32(&w.sending, 0, 1) {
-		defer atomic.StoreInt32(&w.sending, 0)
+func newWorkerConnection(connector *workerConnector, mode AccessMode) (*workerConnection, error) {
+	var err error
+	var startTime time.Time
+	var delegate *seaboltConnection
+	var connection *workerConnection
 
-		var done = make(chan bool, 1)
-		defer close(done)
-
-		if err := w.pool.submit(func(stopper <-chan signal) {
-			item()
-			done <- true
-		}); err != nil {
-			return err
-		}
-
-		<-done
-
-		return nil
+	connection = &workerConnection{
+		connector: connector,
+		pool:      connector.pool,
+		delegate:  nil,
+		active:    0,
 	}
 
-	return newGenericError("a connection is not thread-safe and thus should not be used concurrently")
+	for connection.delegate == nil {
+		if startTime.IsZero() {
+			startTime = time.Now()
+		} else if time.Since(startTime) > connector.config.ConnAcquisitionTimeout {
+			return nil, newConnectionAcquisitionTimedOutError(connector.delegate.valueSystem)
+		}
+
+		if poolError := connection.queueJob(func() {
+			delegate, err = newSeaboltConnection(connector.delegate, mode)
+		}); poolError != nil {
+			err = poolError
+		}
+
+		if err != nil {
+			if isPoolFullError(err) {
+				if connection.waitClosed(connector.config.ConnAcquisitionTimeout - time.Since(startTime)) {
+					continue
+				} else {
+					return nil, newConnectionAcquisitionTimedOutError(connector.delegate.valueSystem)
+				}
+			}
+
+			return nil, err
+		}
+
+		connection.delegate = delegate
+	}
+
+	return connection, nil
 }
 
-func (w *workerConnection) queueRecvJob(item job) error {
-	if atomic.CompareAndSwapInt32(&w.recving, 0, 1) {
-		defer atomic.StoreInt32(&w.recving, 0)
+func (w *workerConnection) waitClosed(timeout time.Duration) bool {
+	if w.connector != nil {
+		select {
+		case <-w.connector.closeSignal:
+			return true
+		case <-time.After(timeout):
+		}
+	}
+
+	return false
+}
+
+func (w *workerConnection) signalClosed() {
+	if w.connector != nil {
+		select {
+		case w.connector.closeSignal <- signal{}:
+		default:
+		}
+	}
+}
+
+func (w *workerConnection) queueJob(item job) error {
+	if atomic.CompareAndSwapInt32(&w.active, 0, 1) {
+		defer atomic.StoreInt32(&w.active, 0)
 
 		var done = make(chan bool, 1)
 		defer close(done)
@@ -81,7 +124,7 @@ func (w *workerConnection) Id() (string, error) {
 	var id string
 	var err error
 
-	if otherErr := w.queueRecvJob(func() {
+	if otherErr := w.queueJob(func() {
 		id, err = w.delegate.Id()
 	}); otherErr != nil {
 		err = otherErr
@@ -94,7 +137,7 @@ func (w *workerConnection) RemoteAddress() (string, error) {
 	var remoteAddress string
 	var err error
 
-	if otherErr := w.queueRecvJob(func() {
+	if otherErr := w.queueJob(func() {
 		remoteAddress, err = w.delegate.RemoteAddress()
 	}); otherErr != nil {
 		err = otherErr
@@ -107,7 +150,7 @@ func (w *workerConnection) Server() (string, error) {
 	var server string
 	var err error
 
-	if otherErr := w.queueRecvJob(func() {
+	if otherErr := w.queueJob(func() {
 		server, err = w.delegate.Server()
 	}); otherErr != nil {
 		err = otherErr
@@ -120,7 +163,7 @@ func (w *workerConnection) Begin(bookmarks []string, txTimeout time.Duration, tx
 	var handle RequestHandle
 	var err error
 
-	if otherErr := w.queueSendJob(func() {
+	if otherErr := w.queueJob(func() {
 		handle, err = w.delegate.Begin(bookmarks, txTimeout, txMetadata)
 	}); otherErr != nil {
 		err = otherErr
@@ -133,7 +176,7 @@ func (w *workerConnection) Commit() (RequestHandle, error) {
 	var handle RequestHandle
 	var err error
 
-	if otherErr := w.queueSendJob(func() {
+	if otherErr := w.queueJob(func() {
 		handle, err = w.delegate.Commit()
 	}); otherErr != nil {
 		err = otherErr
@@ -146,7 +189,7 @@ func (w *workerConnection) Rollback() (RequestHandle, error) {
 	var handle RequestHandle
 	var err error
 
-	if otherErr := w.queueSendJob(func() {
+	if otherErr := w.queueJob(func() {
 		handle, err = w.delegate.Rollback()
 	}); otherErr != nil {
 		err = otherErr
@@ -159,7 +202,7 @@ func (w *workerConnection) Run(cypher string, args map[string]interface{}, bookm
 	var handle RequestHandle
 	var err error
 
-	if otherErr := w.queueSendJob(func() {
+	if otherErr := w.queueJob(func() {
 		handle, err = w.delegate.Run(cypher, args, bookmarks, txTimeout, txMetadata)
 	}); otherErr != nil {
 		err = otherErr
@@ -172,7 +215,7 @@ func (w *workerConnection) PullAll() (RequestHandle, error) {
 	var handle RequestHandle
 	var err error
 
-	if otherErr := w.queueSendJob(func() {
+	if otherErr := w.queueJob(func() {
 		handle, err = w.delegate.PullAll()
 	}); otherErr != nil {
 		err = otherErr
@@ -185,7 +228,7 @@ func (w *workerConnection) DiscardAll() (RequestHandle, error) {
 	var handle RequestHandle
 	var err error
 
-	if otherErr := w.queueSendJob(func() {
+	if otherErr := w.queueJob(func() {
 		handle, err = w.delegate.DiscardAll()
 	}); otherErr != nil {
 		err = otherErr
@@ -198,7 +241,7 @@ func (w *workerConnection) Reset() (RequestHandle, error) {
 	var handle RequestHandle
 	var err error
 
-	if otherErr := w.queueSendJob(func() {
+	if otherErr := w.queueJob(func() {
 		handle, err = w.delegate.Reset()
 	}); otherErr != nil {
 		err = otherErr
@@ -210,7 +253,7 @@ func (w *workerConnection) Reset() (RequestHandle, error) {
 func (w *workerConnection) Flush() error {
 	var err error
 
-	if otherErr := w.queueSendJob(func() {
+	if otherErr := w.queueJob(func() {
 		err = w.delegate.Flush()
 	}); otherErr != nil {
 		err = otherErr
@@ -223,7 +266,7 @@ func (w *workerConnection) Fetch(request RequestHandle) (FetchType, error) {
 	var fetched FetchType
 	var err error
 
-	if otherErr := w.queueRecvJob(func() {
+	if otherErr := w.queueJob(func() {
 		fetched, err = w.delegate.Fetch(request)
 	}); otherErr != nil {
 		err = otherErr
@@ -236,7 +279,7 @@ func (w *workerConnection) FetchSummary(request RequestHandle) (int, error) {
 	var fetched int
 	var err error
 
-	if otherErr := w.queueRecvJob(func() {
+	if otherErr := w.queueJob(func() {
 		fetched, err = w.delegate.FetchSummary(request)
 	}); otherErr != nil {
 		err = otherErr
@@ -249,7 +292,7 @@ func (w *workerConnection) LastBookmark() (string, error) {
 	var bookmark string
 	var err error
 
-	if otherErr := w.queueRecvJob(func() {
+	if otherErr := w.queueJob(func() {
 		bookmark, err = w.delegate.LastBookmark()
 	}); otherErr != nil {
 		err = otherErr
@@ -262,7 +305,7 @@ func (w *workerConnection) Fields() ([]string, error) {
 	var fields []string
 	var err error
 
-	if otherErr := w.queueRecvJob(func() {
+	if otherErr := w.queueJob(func() {
 		fields, err = w.delegate.Fields()
 	}); otherErr != nil {
 		err = otherErr
@@ -275,7 +318,7 @@ func (w *workerConnection) Metadata() (map[string]interface{}, error) {
 	var metadata map[string]interface{}
 	var err error
 
-	if otherErr := w.queueRecvJob(func() {
+	if otherErr := w.queueJob(func() {
 		metadata, err = w.delegate.Metadata()
 	}); otherErr != nil {
 		err = otherErr
@@ -288,7 +331,7 @@ func (w *workerConnection) Data() ([]interface{}, error) {
 	var data []interface{}
 	var err error
 
-	if otherErr := w.queueRecvJob(func() {
+	if otherErr := w.queueJob(func() {
 		data, err = w.delegate.Data()
 	}); otherErr != nil {
 		err = otherErr
@@ -300,11 +343,13 @@ func (w *workerConnection) Data() ([]interface{}, error) {
 func (w *workerConnection) Close() error {
 	var err error
 
-	if otherErr := w.queueSendJob(func() {
+	if otherErr := w.queueJob(func() {
 		err = w.delegate.Close()
 	}); otherErr != nil {
 		err = otherErr
 	}
+
+	w.signalClosed()
 
 	return err
 }

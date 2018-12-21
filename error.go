@@ -128,9 +128,9 @@ func (failure *defaultConnectorError) Description() string {
 func (failure *defaultConnectorError) Error() string {
 	if failure.description != "" {
 		return fmt.Sprintf("%s: error: [%d] %s, state: %d, context: %s", failure.description, failure.code, failure.codeText, failure.state, failure.context)
-	} else {
-		return fmt.Sprintf("error: [%d] %s, state: %d, context: %s", failure.code, failure.codeText, failure.state, failure.context)
 	}
+
+	return fmt.Sprintf("error: [%d] %s, state: %d, context: %s", failure.code, failure.codeText, failure.state, failure.context)
 }
 
 func (failure *defaultGenericError) BoltError() bool {
@@ -373,4 +373,17 @@ func IsSessionExpired(err error) bool {
 	}
 
 	return false
+}
+
+func isPoolFullError(err error) bool {
+	if connectorError, ok := err.(ConnectorError); ok {
+		return connectorError.Code() == C.BOLT_POOL_FULL
+	}
+
+	return false
+}
+
+func newConnectionAcquisitionTimedOutError(valueSystem *boltValueSystem) error {
+	return valueSystem.connectorErrorFactory(C.BOLT_CONNECTION_STATE_DISCONNECTED, C.BOLT_POOL_FULL, C.GoString(C.BoltError_get_string(C.BOLT_POOL_FULL)), "", "")
+
 }

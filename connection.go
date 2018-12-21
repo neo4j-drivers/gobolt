@@ -23,6 +23,21 @@ import (
 	"time"
 )
 
+// RequestHandle identifies an individual request sent to server
+type RequestHandle int64
+
+// FetchType identifies the type of the result fetched via Fetch() call
+type FetchType int
+
+const (
+	// FetchTypeRecord tells that fetched data is record
+	FetchTypeRecord FetchType = 1
+	// FetchTypeMetadata tells that fetched data is metadata
+	FetchTypeMetadata FetchType = 0
+	// FetchTypeError tells that fetch was not successful
+	FetchTypeError FetchType = -1
+)
+
 // Connection represents an active seabolt connection
 type Connection interface {
 	Id() (string, error)
