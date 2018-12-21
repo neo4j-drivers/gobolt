@@ -115,7 +115,7 @@ func maxWorkers(config *Config) int {
 }
 
 func minWorkers(config *Config) int {
-	var workersMin = 5
+	var workersMin = 0
 	if val, ok := os.LookupEnv("BOLTWORKERSMIN"); ok {
 		if parsed, err := strconv.ParseInt(val, 10, 32); err == nil {
 			workersMin = int(parsed)
