@@ -96,13 +96,18 @@ func (pool *workerPool) launchWorker() {
 }
 
 func workerEntryPoint(pool *workerPool) {
+	t := time.NewTimer(pool.keepAlive)
 	for {
 		select {
 		case work := <-pool.workQueue:
 			work(pool.stopper)
+			if !t.Stop() {
+				<-t.C
+			}
+			t.Reset(pool.keepAlive)
 		case <-pool.stopper:
 			return
-		case <-time.After(pool.keepAlive):
+		case <-t.C:
 			return
 		}
 	}
