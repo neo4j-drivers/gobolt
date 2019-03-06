@@ -98,7 +98,7 @@ func createConfig(key int, uri *url.URL, config *Config, valueSystem *boltValueS
 	defer C.BoltAddressResolver_destroy(cResolver)
 
 	cConfig = C.BoltConfig_create()
-	C.BoltConfig_set_mode(cConfig, mode(uri))
+	C.BoltConfig_set_scheme(cConfig, scheme(uri))
 	C.BoltConfig_set_transport(cConfig, transport(config))
 	C.BoltConfig_set_trust(cConfig, cTrust)
 	C.BoltConfig_set_user_agent(cConfig, cUserAgent)
@@ -112,11 +112,15 @@ func createConfig(key int, uri *url.URL, config *Config, valueSystem *boltValueS
 	return cConfig, nil
 }
 
-func mode(uri *url.URL) C.BoltMode {
-	var mode C.BoltMode = C.BOLT_MODE_DIRECT
+func scheme(uri *url.URL) C.BoltScheme {
+	var mode C.BoltScheme = C.BOLT_SCHEME_DIRECT
 	if uri.Scheme == "bolt+routing" {
-		mode = C.BOLT_MODE_ROUTING
+		mode = C.BOLT_SCHEME_ROUTING
 	}
+	if uri.Scheme == "neo4j" {
+		mode = C.BOLT_SCHEME_NEO4J
+	}
+
 	return mode
 }
 
