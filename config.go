@@ -105,9 +105,9 @@ func createConfig(key int, uri *url.URL, config *Config, valueSystem *boltValueS
 	C.BoltConfig_set_routing_context(cConfig, cRoutingContext)
 	C.BoltConfig_set_address_resolver(cConfig, cResolver)
 	C.BoltConfig_set_log(cConfig, cLogger)
-	C.BoltConfig_set_max_pool_size(cConfig, C.int(config.MaxPoolSize))
-	C.BoltConfig_set_max_connection_life_time(cConfig, C.int(config.MaxConnLifetime/time.Millisecond))
-	C.BoltConfig_set_max_connection_acquisition_time(cConfig, C.int(config.ConnAcquisitionTimeout/time.Millisecond))
+	C.BoltConfig_set_max_pool_size(cConfig, C.int32_t(config.MaxPoolSize))
+	C.BoltConfig_set_max_connection_life_time(cConfig, C.int32_t(config.MaxConnLifetime/time.Millisecond))
+	C.BoltConfig_set_max_connection_acquisition_time(cConfig, C.int32_t(config.ConnAcquisitionTimeout/time.Millisecond))
 	C.BoltConfig_set_socket_options(cConfig, cSocketOpts)
 	return cConfig, nil
 }
@@ -135,7 +135,7 @@ func transport(config *Config) C.BoltTransport {
 func createSocketOptions(config *Config) *C.struct_BoltSocketOptions {
 	var cSocketOpts = C.BoltSocketOptions_create()
 
-	C.BoltSocketOptions_set_connect_timeout(cSocketOpts, C.int(config.SockConnectTimeout/time.Millisecond))
+	C.BoltSocketOptions_set_connect_timeout(cSocketOpts, C.int32_t(config.SockConnectTimeout/time.Millisecond))
 	C.BoltSocketOptions_set_keep_alive(cSocketOpts, 1)
 	if !config.SockKeepalive {
 		C.BoltSocketOptions_set_keep_alive(cSocketOpts, 0)

@@ -94,7 +94,7 @@ func (valueSystem *boltValueSystem) valueAsFloat(value *C.struct_BoltValue) floa
 
 func (valueSystem *boltValueSystem) valueAsString(value *C.struct_BoltValue) string {
 	val := C.BoltString_get(value)
-	return C.GoStringN(val, C.BoltValue_size(value))
+	return C.GoStringN(val, C.int(C.BoltValue_size(value)))
 }
 
 func (valueSystem *boltValueSystem) valueAsDictionary(value *C.struct_BoltValue) (map[string]interface{}, error) {
@@ -145,7 +145,7 @@ func (valueSystem *boltValueSystem) structAsList(value *C.struct_BoltValue) ([]i
 
 func (valueSystem *boltValueSystem) valueAsBytes(value *C.struct_BoltValue) []byte {
 	val := C.BoltBytes_get_all(value)
-	return C.GoBytes(unsafe.Pointer(val), C.BoltValue_size(value))
+	return C.GoBytes(unsafe.Pointer(val), C.int(C.BoltValue_size(value)))
 }
 
 func (valueSystem *boltValueSystem) valueToConnector(value interface{}) (*C.struct_BoltValue, error) {
